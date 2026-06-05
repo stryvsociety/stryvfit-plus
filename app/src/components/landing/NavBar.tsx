@@ -1,9 +1,9 @@
-// [claude-code 2026-05-14] Scroll-triggered wordmark-to-insignia swap in navbar
-
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
+import { LogIn } from 'lucide-react';
 import { NAV_ITEMS } from '@/hooks/useActiveSection';
 import type { SectionId } from '@/hooks/useActiveSection';
 import { BrandWordmark } from '@/components/BrandWordmark';
@@ -31,7 +31,7 @@ export default function NavBar({
       style={{ backgroundColor: isDark ? 'rgba(12, 10, 8, 0.8)' : 'rgba(12, 10, 8, 0.6)' }}
     >
       <div className="backdrop-blur-xl border-b border-gold/5">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="mx-auto flex h-16 max-w-[1380px] items-center justify-between px-5 sm:px-6 md:h-20 xl:px-8">
           {/* Logo */}
           <a
             href="#hero"
@@ -43,42 +43,62 @@ export default function NavBar({
               transition={{ duration: 0.25, ease: 'easeInOut' }}
               className="overflow-hidden whitespace-nowrap"
             >
-              <BrandWordmark className="w-[220px] md:w-[260px]" />
+              <BrandWordmark className="w-[190px] sm:w-[220px] md:w-[260px] xl:w-[240px] 2xl:w-[260px]" />
             </motion.div>
             <motion.div
               animate={{ opacity: scrolled ? 1 : 0, width: scrolled ? 'auto' : 0 }}
               transition={{ duration: 0.25, ease: 'easeInOut' }}
               className="overflow-hidden whitespace-nowrap"
             >
-              <Insignia className="w-14 h-14" />
+              <Insignia className="h-12 w-12 md:h-14 md:w-14" />
             </motion.div>
           </a>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-6">
-            {NAV_ITEMS.filter((item) => item.label).map((item) => (
+          <nav className="ml-8 hidden flex-1 items-center justify-end gap-6 xl:flex 2xl:ml-12 2xl:gap-10">
+            <div className="flex items-center gap-5 2xl:gap-8">
+              {NAV_ITEMS.filter((item) => item.label).map((item) => (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  className={`whitespace-nowrap font-caption text-[10px] uppercase tracking-[0.15em] transition-all duration-300 ${
+                    activeSection === item.id
+                      ? 'text-gold'
+                      : 'text-text-dim hover:text-text-muted'
+                  }`}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 xl:gap-4">
               <a
-                key={item.id}
-                href={`#${item.id}`}
-                className={`font-caption text-[10px] tracking-[0.15em] uppercase transition-all duration-300 ${
-                  activeSection === item.id
-                    ? 'text-gold'
-                    : 'text-text-dim hover:text-text-muted'
-                }`}
+                href="/book"
+                className="whitespace-nowrap px-3 py-2 glass-button text-gold font-accent text-[10px] uppercase tracking-[0.18em] 2xl:px-5"
               >
-                {item.label}
+                Claim Your Free Session
               </a>
-            ))}
-            <a
-              href="/book"
-              className="ml-4 px-4 py-2 glass-button text-gold font-caption text-[10px] tracking-[0.15em] uppercase"
-            >
-              Claim Your Free Session
-            </a>
+              <Link
+                href="/sign-in"
+                className="inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-sm border border-gold/20 px-4 font-accent text-[10px] uppercase tracking-[0.18em] text-text-muted transition-colors hover:border-gold/40 hover:text-gold"
+              >
+                <LogIn className="h-4 w-4" strokeWidth={1.8} />
+                Login
+              </Link>
+            </div>
           </nav>
 
-          {/* Mobile hamburger */}
-          <MobileMenu activeSection={activeSection} />
+          {/* Mobile actions */}
+          <div className="flex items-center gap-2 xl:hidden">
+            <Link
+              href="/sign-in"
+              aria-label="Log in"
+              className="flex h-9 w-9 items-center justify-center rounded-sm border border-gold/15 bg-bg/30 text-text transition-colors hover:border-gold/35 hover:text-gold"
+            >
+              <LogIn className="h-4 w-4" strokeWidth={1.8} />
+            </Link>
+            <MobileMenu activeSection={activeSection} />
+          </div>
         </div>
       </div>
     </header>
@@ -90,7 +110,7 @@ function MobileMenu({ activeSection }: { activeSection: SectionId }) {
   const items = NAV_ITEMS.filter((item) => item.label);
 
   return (
-    <div className="md:hidden">
+    <div>
       <button
         type="button"
         aria-label={open ? 'Close menu' : 'Open menu'}
@@ -127,10 +147,18 @@ function MobileMenu({ activeSection }: { activeSection: SectionId }) {
               <a
                 href="/book"
                 onClick={() => setOpen(false)}
-                className="mx-2 mt-2 rounded-sm bg-gold px-4 py-3 text-center font-caption text-[11px] uppercase tracking-[0.15em] text-bg"
+                className="mx-2 mt-2 rounded-sm bg-gold px-4 py-3 text-center font-accent text-[11px] uppercase tracking-[0.18em] text-bg"
               >
                 Claim Your Free Session
               </a>
+              <Link
+                href="/sign-in"
+                onClick={() => setOpen(false)}
+                className="mx-2 mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-gold/20 px-4 py-3 text-center font-accent text-[11px] uppercase tracking-[0.18em] text-text-muted transition-colors hover:border-gold/40 hover:text-gold"
+              >
+                <LogIn className="h-4 w-4" strokeWidth={1.8} />
+                Login
+              </Link>
             </nav>
           </motion.div>
         )}

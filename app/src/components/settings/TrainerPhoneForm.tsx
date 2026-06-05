@@ -41,7 +41,7 @@ function FormBody({ initialPhone, initialName }: { initialPhone: string; initial
         <label className="font-caption text-[11px] uppercase tracking-[0.16em] text-text-muted block mb-2">
           Trainer name
         </label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sam" />
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ashley" />
       </div>
       <div>
         <label className="font-caption text-[11px] uppercase tracking-[0.16em] text-text-muted block mb-2">
@@ -56,7 +56,8 @@ function FormBody({ initialPhone, initialName }: { initialPhone: string; initial
           placeholder="+13053479816"
         />
         <p className="font-body text-xs text-text-dim mt-2">
-          Members see a &quot;Message Sam&quot; button on the Coach tab that opens iMessage to this number.
+          Members see a &quot;Message {name.trim() || 'Ashley'}&quot; button on the Coach tab that opens
+          iMessage to this number.
         </p>
       </div>
       <Button type="submit" variant="gold" size="md" disabled={saving}>

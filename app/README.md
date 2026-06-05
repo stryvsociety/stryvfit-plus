@@ -19,7 +19,7 @@ This README is the app developer summary, not the full operator guide.
 
 - Next.js 14 (App Router) + React 18 + Tailwind
 - Supabase (auth, Postgres, RLS, realtime)
-- Stripe ($100/mo Coaching, $200/mo Premium)
+- Stripe Checkout for in-person packages and monthly online coaching subscriptions
 - Google Calendar handoff through a Stryv-themed scheduler
 - Browserbase Fetch API for Ideal Nutrition menu ingestion
 - Self-hosted wger exercise/workout data via `WGER_API_BASE_URL`
@@ -50,7 +50,7 @@ This README is the app developer summary, not the full operator guide.
 
 ## Support Pipeline
 
-- Remote incidents post to `/api/incidents`, dedupe in Supabase, and auto-file Linear issues to Solvys.
+- Remote incidents post to `/api/incidents`, dedupe in Supabase, and auto-file Linear issues to the SSFitness workspace.
 - `/admin/pulse` shows open incidents, Linear links, and published fix records in System Health.
 - Scheduled Codex should poll completed SSFitness Linear incident tickets and call `/api/incidents/sync-resolution` with `INCIDENT_WEBHOOK_SECRET`.
 
@@ -75,6 +75,8 @@ Then run `supabase/schema.sql` in the Supabase SQL editor.
 ## Deploys
 
 - App/Admin/API/PWA → Cloudflare Workers using `@opennextjs/cloudflare`
+- From `app/`: `bun run cf:deploy` (reads `CLOUDFLARE_*` from `.env.local`) · `bun run cf:secrets` to sync Worker secrets
+- Client launch checklist: `../docs/ASHLEY-LAUNCH-READY.md`
 - Supabase → hosted Postgres, migrations in `supabase/migrations`
 - Linear → automatic Solvys support tickets from `/api/incidents`
 - DNS: `app.stryvsocietyfit.com` and `book.stryvsocietyfit.com` point to the same Cloudflare Worker; `book` can route users directly to `/book` through DNS/redirect policy if desired

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
+  CalendarClock,
   ChefHat,
   Check,
   CircleArrowUp,
@@ -11,6 +12,7 @@ import {
   Plus,
   Search,
   ShoppingCart,
+  Trash2,
   Utensils,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -22,19 +24,14 @@ import { AdminSectionNav } from '@/components/admin/AdminSectionNav';
 import { AdminSupportChat } from '@/components/admin/AdminSupportChat';
 import { ThemeToggle, usePersistedTheme } from '@/components/ui/ThemeToggle';
 import { readClientRequests, type ClientRequest } from '@/lib/clientRequests';
+import type { AdminBookingSummary } from '@/lib/bookings';
 
 type AdminTab = 'appointments' | 'meals' | 'clients';
 
-const clients = [
+const defaultClients = [
   { name: 'Maya Rivera', status: 'Remote', goal: 'Strength rebuild', payment: 'Active' },
   { name: 'Devon Clarke', status: 'In person', goal: 'Hypertrophy', payment: 'Due tomorrow' },
   { name: 'Jordan Ellis', status: 'Remote', goal: 'Conditioning', payment: 'Past due day 3' },
-];
-
-const appointmentQueue = [
-  { time: '8:30 AM', client: 'Maya Rivera', type: 'Remote assessment', action: 'Publish warmup' },
-  { time: '11:00 AM', client: 'Devon Clarke', type: 'Strength floor', action: 'Confirm equipment' },
-  { time: '4:30 PM', client: 'Jordan Ellis', type: 'Video follow-up', action: 'Review payment gate' },
 ];
 
 const nutritionTargets: Record<
@@ -79,21 +76,70 @@ const prepChecklist = [
   { label: 'StryvFit+ publish state', status: 'Ready' },
 ];
 
-export function TrainerOpsStudio() {
+type AdminClientSummary = (typeof defaultClients)[number];
+
+function clientNameFromBooking(booking: AdminBookingSummary): string {
+  return booking.clientName?.trim() || booking.clientEmail?.trim() || 'StryvFit+ client';
+}
+
+function buildClientRoster(bookings: AdminBookingSummary[]): AdminClientSummary[] {
+  const byName = new Map<string, AdminClientSummary>();
+
+  for (const booking of bookings) {
+    const name = clientNameFromBooking(booking);
+    if (!byName.has(name)) {
+      byName.set(name, {
+        name,
+        status: booking.serviceType === 'free' ? 'First session booked' : 'Booked',
+        goal: booking.serviceLabel,
+        payment: booking.status === 'pending_payment' ? 'Payment pending' : 'Active',
+      });
+    }
+  }
+
+  for (const client of defaultClients) {
+    if (!byName.has(client.name)) byName.set(client.name, client);
+  }
+
+  return [...byName.values()];
+}
+
+export function TrainerOpsStudio({ initialBookings = [] }: { initialBookings?: AdminBookingSummary[] }) {
   const [tab, setTab] = useState<AdminTab>('appointments');
-  const [selectedClient, setSelectedClient] = useState(clients[0].name);
+  const [bookings, setBookings] = useState<AdminBookingSummary[]>(initialBookings);
+  const [cancelingBookingId, setCancelingBookingId] = useState<string | null>(null);
+  const [cancelNotice, setCancelNotice] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
   const [theme, setTheme] = usePersistedTheme('stryvadmin-theme', 'light');
   const isDark = theme === 'dark';
+  const clients = useMemo(() => buildClientRoster(bookings), [bookings]);
+  const [selectedClient, setSelectedClient] = useState(() => clients[0]?.name ?? defaultClients[0].name);
 
   const selected = useMemo(
-    () => clients.find((client) => client.name === selectedClient) ?? clients[0],
-    [selectedClient]
+    () => clients.find((client) => client.name === selectedClient) ?? clients[0] ?? defaultClients[0],
+    [clients, selectedClient]
   );
 
   function publishPlan() {
     setPublished(true);
     window.setTimeout(() => setPublished(false), 1800);
+  }
+
+  async function cancelBookingById(bookingId: string) {
+    setCancelingBookingId(bookingId);
+    setCancelNotice(null);
+    try {
+      const response = await fetch(`/api/admin/bookings/${bookingId}`, { method: 'DELETE' });
+      const payload = (await response.json().catch(() => null)) as { error?: string; calendarWarning?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? 'Unable to cancel booking');
+
+      setBookings((current) => current.filter((booking) => booking.id !== bookingId));
+      setCancelNotice(payload?.calendarWarning ? `Cancelled locally. ${payload.calendarWarning}` : 'Appointment cancelled.');
+    } catch (error) {
+      setCancelNotice(error instanceof Error ? error.message : 'Unable to cancel booking');
+    } finally {
+      setCancelingBookingId(null);
+    }
   }
 
   useEffect(() => {
@@ -105,16 +151,26 @@ export function TrainerOpsStudio() {
     }
   }, []);
 
+  useEffect(() => {
+    setBookings(initialBookings);
+  }, [initialBookings]);
+
+  useEffect(() => {
+    if (!clients.some((client) => client.name === selectedClient)) {
+      setSelectedClient(clients[0]?.name ?? defaultClients[0].name);
+    }
+  }, [clients, selectedClient]);
+
   return (
     <main className={`min-h-dvh ${isDark ? 'admin-theme-dark bg-[#070e13] text-white' : 'bg-[#f7f7f5] text-[#151515]'}`}>
       <div className="mx-auto grid min-h-dvh max-w-7xl grid-rows-[auto_1fr] px-4 py-4 sm:px-6 lg:px-8">
         <header className="space-y-4 border-b border-[#d9d7d1] pb-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="rounded-md bg-[#151515] px-3 py-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <div className="flex-none rounded-md bg-[#151515] px-3 py-2">
                 <BrandWordmark className="w-[172px]" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="font-body text-sm text-[#66615a]">
                   Manage appointments, meal plans, and workout routines before they reach StryvFit+.
                 </p>
@@ -176,7 +232,14 @@ export function TrainerOpsStudio() {
           </aside>
 
           <section className="min-w-0">
-            {tab === 'appointments' ? <AppointmentsPanel /> : null}
+            {tab === 'appointments' ? (
+              <AppointmentsPanel
+                bookings={bookings}
+                cancelingBookingId={cancelingBookingId}
+                cancelNotice={cancelNotice}
+                onCancelBooking={cancelBookingById}
+              />
+            ) : null}
             {tab === 'meals' ? <MealsPanel selectedClient={selected.name} /> : null}
             {tab === 'clients' ? <ClientsPanel /> : null}
           </section>
@@ -200,7 +263,7 @@ export function TrainerOpsStudio() {
             </section>
             <AdminSupportChat clientName={selected.name} />
             <div className="rounded-md border border-[#dedbd4] bg-white p-2">
-              <SystemHealthPanel />
+              <SystemHealthPanel compact />
             </div>
           </aside>
 
@@ -405,32 +468,150 @@ function MealsPanel({ selectedClient }: { selectedClient: string }) {
   );
 }
 
-function AppointmentsPanel() {
+const bookingDateFormatter = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'America/New_York',
+});
+
+const bookingTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'America/New_York',
+});
+
+function formatBookingDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Date pending' : bookingDateFormatter.format(date);
+}
+
+function formatBookingTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Time pending' : bookingTimeFormatter.format(date);
+}
+
+function bookingStatusLabel(booking: AdminBookingSummary): string {
+  if (booking.status === 'pending_payment') return 'Payment pending';
+  if (booking.status === 'rescheduled') return 'Rescheduled';
+  if (booking.status === 'held') return 'Held';
+  if (booking.googleEventId) return 'Calendar ready';
+  if (booking.serviceType === 'free') return 'Calendar pending';
+  return 'Confirmed';
+}
+
+function AppointmentsPanel({
+  bookings,
+  cancelingBookingId,
+  cancelNotice,
+  onCancelBooking,
+}: {
+  bookings: AdminBookingSummary[];
+  cancelingBookingId: string | null;
+  cancelNotice: string | null;
+  onCancelBooking: (bookingId: string) => Promise<void>;
+}) {
+  const firstFreeSession = bookings.find((booking) => booking.serviceType === 'free');
+
   return (
     <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
       <div className="rounded-md border border-[#dedbd4] bg-white p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Today</p>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Live bookings</p>
             <h2 className="mt-1 font-section text-4xl leading-none">Appointment command</h2>
           </div>
-          <button className="ios-pill inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#dedbd4]">
+          <button
+            type="button"
+            aria-label="Add appointment"
+            className="ios-pill inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#dedbd4]"
+          >
             <Plus className="h-4 w-4" />
           </button>
         </div>
-        <div className="space-y-2">
-          {appointmentQueue.map((item) => (
-            <article key={`${item.time}-${item.client}`} className="grid gap-3 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3 sm:grid-cols-[86px_1fr_auto] sm:items-center">
-              <p className="font-headline text-lg uppercase">{item.time}</p>
+
+        {cancelNotice ? (
+          <p className="mb-3 rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-3 font-body text-xs leading-relaxed text-[#6d675f]">
+            {cancelNotice}
+          </p>
+        ) : null}
+
+        {firstFreeSession ? (
+          <article className="mb-4 rounded-md border border-[#f24f09]/35 bg-[#fff3ec] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="font-body text-sm font-semibold">{item.client}</h3>
-                <p className="font-body text-xs text-[#6d675f]">{item.type}</p>
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4 text-[#f24f09]" />
+                  <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#f24f09]">
+                    Free first session booked
+                  </p>
+                </div>
+                <h3 className="mt-2 font-headline text-2xl uppercase leading-none">
+                  {clientNameFromBooking(firstFreeSession)}
+                </h3>
+                {firstFreeSession.clientEmail ? (
+                  <p className="mt-1 font-body text-xs text-[#6d675f]">{firstFreeSession.clientEmail}</p>
+                ) : null}
               </div>
-              <button className="ios-pill min-h-10 rounded-full bg-[#151515] px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-white">
-                {item.action}
-              </button>
+              <div className="rounded-md bg-white px-3 py-2 text-right">
+                <p className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
+                  {formatBookingDate(firstFreeSession.startsAt)}
+                </p>
+                <p className="mt-1 font-headline text-lg uppercase text-[#151515]">
+                  {formatBookingTime(firstFreeSession.startsAt)}
+                </p>
+              </div>
+            </div>
+          </article>
+        ) : null}
+
+        <div className="space-y-2">
+          {bookings.length === 0 ? (
+            <article className="rounded-md border border-dashed border-[#dedbd4] bg-[#fbfaf8] p-6 text-center">
+              <p className="font-headline text-xl uppercase text-[#151515]">No live bookings yet</p>
+              <p className="mt-2 font-body text-sm text-[#6d675f]">
+                Confirmed sessions from the client booking flow will appear here.
+              </p>
             </article>
-          ))}
+          ) : (
+            bookings.map((booking) => (
+              <article
+                key={booking.id}
+                className="grid gap-3 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3 sm:grid-cols-[120px_1fr_auto] sm:items-center"
+              >
+                <div>
+                  <p className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
+                    {formatBookingDate(booking.startsAt)}
+                  </p>
+                  <p className="mt-1 font-headline text-lg uppercase">{formatBookingTime(booking.startsAt)}</p>
+                </div>
+                <div>
+                  <h3 className="font-body text-sm font-semibold">{clientNameFromBooking(booking)}</h3>
+                  <p className="font-body text-xs text-[#6d675f]">
+                    {booking.serviceLabel} · {booking.durationMinutes} min
+                  </p>
+                  {booking.clientEmail ? (
+                    <p className="mt-1 font-body text-[11px] text-[#817b72]">{booking.clientEmail}</p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <span className="ios-pill inline-flex min-h-10 items-center justify-center rounded-full bg-[#151515] px-4 text-center font-caption text-[9px] uppercase tracking-[0.13em] text-white">
+                    {bookingStatusLabel(booking)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void onCancelBooking(booking.id)}
+                    disabled={cancelingBookingId === booking.id}
+                    className="ios-pill inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#dedbd4] bg-white text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={`Cancel appointment for ${clientNameFromBooking(booking)}`}
+                    title="Cancel appointment"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={1.7} />
+                  </button>
+                </div>
+              </article>
+            ))
+          )}
         </div>
       </div>
     </motion.section>

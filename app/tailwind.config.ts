@@ -32,7 +32,7 @@ const config: Config = {
         brand: ['"Projekt Blackbird"', '"Projekt Blackbird Placeholder"', 'sans-serif'],
         accent: ['var(--font-offside)', 'sans-serif'],
         method: ['var(--font-overpass)', 'sans-serif'],
-        section: ['var(--font-anton)', 'sans-serif'],
+        section: ['var(--font-oswald)', 'var(--font-anton)', 'sans-serif'],
         price: ['var(--font-karma)', 'serif'],
         headline: ['var(--font-oswald)', 'sans-serif'],
         copy: ['var(--font-dm-sans)', 'sans-serif'],

@@ -255,13 +255,14 @@ bun run cf:deploy
 
 - `app.stryvsocietyfit.com` -> `stryvfit-plus`
 - `book.stryvsocietyfit.com` -> same Worker; optionally redirect `/` to `/book`
+- `admin.stryvsocietyfit.com` -> same Worker; redirects to apex admin
 - `stryvsocietyfit.com` -> same Worker root, unless marketing is split later
 
 10. Smoke production:
 
 ```bash
 curl -fsS https://app.stryvsocietyfit.com/book >/dev/null
-curl -fsS https://app.stryvsocietyfit.com/admin/pulse >/dev/null
+curl -fsS https://stryvsocietyfit.com/admin/pulse >/dev/null
 curl -fsS https://app.stryvsocietyfit.com/api/incidents
 ```
 

@@ -7,6 +7,8 @@ out
 dist
 .env
 .env.local
+.cloudflare-redeploy.env
+.dev.vars
 tsconfig.tsbuildinfo
 *.log
 .DS_Store

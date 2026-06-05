@@ -1,7 +1,9 @@
 import { AppShell } from '@/components/layout/AppShell';
 import { MealPrepPlanner } from '@/components/meals/MealPrepPlanner';
+import { requireAdminUser } from '@/lib/auth';
 
-export default function AdminNutritionPage() {
+export default async function AdminNutritionPage() {
+  await requireAdminUser();
   return (
     <AppShell>
       <header className="mb-6">

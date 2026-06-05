@@ -22,7 +22,7 @@ create table if not exists public.profiles (
 create table if not exists public.app_settings (
   id int primary key default 1,
   trainer_phone text,
-  trainer_name text not null default 'Sam',
+  trainer_name text not null default 'Ashley',
   cancellation_policy_hours int not null default 24,
   meal_prep_enabled boolean not null default false,
   doordash_partner_url text,

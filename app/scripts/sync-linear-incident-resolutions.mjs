@@ -120,7 +120,7 @@ ${entryLine}
 }
 
 async function linearGraphql(query, variables) {
-  const apiKey = requireEnv("LINEAR_API_KEY");
+  const apiKey = requireEnv("SSFITNESS_LINEAR_API_KEY");
   const response = await fetch("https://api.linear.app/graphql", {
     method: "POST",
     headers: {
@@ -145,10 +145,8 @@ async function linearGraphql(query, variables) {
   return data.data;
 }
 
-async function searchCompletedIssues(term) {
-  const filter = {
-    state: { type: { eq: "completed" } },
-  };
+async function searchCompletedIssues(term, { includeTeamFilter = true } = {}) {
+  const filter = buildCompletedIssueFilterForSearch({ includeTeamFilter });
 
   const data = await linearGraphql(
     `
@@ -169,6 +167,95 @@ async function searchCompletedIssues(term) {
   );
 
   return Array.isArray(data?.searchIssues?.nodes) ? data.searchIssues.nodes : [];
+}
+
+function parseCsvEnv(name) {
+  const value = optionalEnv(name);
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function buildCompletedIssueFilterForSearch({ includeTeamFilter = true } = {}) {
+  const filter = {
+    state: { type: { eq: "completed" } },
+  };
+
+  const teamId = optionalEnv("SSFITNESS_LINEAR_TEAM_ID");
+  if (includeTeamFilter && teamId) filter.team = { id: { eq: teamId } };
+
+  return filter;
+}
+
+function buildCompletedIncidentIssueFilterByLabels() {
+  const filter = buildCompletedIssueFilterForSearch();
+  const labelIds = parseCsvEnv("SSFITNESS_LINEAR_INCIDENT_LABEL_IDS");
+  if (labelIds.length) {
+    filter.labels = {
+      some: {
+        id: { in: labelIds },
+      },
+    };
+  }
+  return filter;
+}
+
+async function listCompletedIncidentIssuesByLabels() {
+  const filter = buildCompletedIncidentIssueFilterByLabels();
+
+  const data = await linearGraphql(
+    `
+      query Issues($filter: IssueFilter, $first: Int!) {
+        issues(filter: $filter, first: $first) {
+          nodes {
+            id
+            identifier
+            title
+            url
+            completedAt
+            updatedAt
+          }
+        }
+      }
+    `,
+    { filter, first: 50 }
+  );
+
+  return Array.isArray(data?.issues?.nodes) ? data.issues.nodes : [];
+}
+
+async function listCompletedIncidentIssuesByLabelsNoTeam() {
+  const filter = buildCompletedIssueFilterForSearch({ includeTeamFilter: false });
+  const labelIds = parseCsvEnv("SSFITNESS_LINEAR_INCIDENT_LABEL_IDS");
+  if (labelIds.length) {
+    filter.labels = {
+      some: {
+        id: { in: labelIds },
+      },
+    };
+  }
+
+  const data = await linearGraphql(
+    `
+      query Issues($filter: IssueFilter, $first: Int!) {
+        issues(filter: $filter, first: $first) {
+          nodes {
+            id
+            identifier
+            title
+            url
+            completedAt
+            updatedAt
+          }
+        }
+      }
+    `,
+    { filter, first: 50 }
+  );
+
+  return Array.isArray(data?.issues?.nodes) ? data.issues.nodes : [];
 }
 
 async function fetchIssueDetails(issueId) {
@@ -316,7 +403,7 @@ async function main() {
   tryLoadDotEnvFiles();
 
   const missing = [];
-  for (const name of ["LINEAR_API_KEY", "INCIDENT_WEBHOOK_SECRET"]) {
+  for (const name of ["SSFITNESS_LINEAR_API_KEY", "INCIDENT_WEBHOOK_SECRET"]) {
     if (!optionalEnv(name)) missing.push(name);
   }
   if (missing.length) {
@@ -338,11 +425,36 @@ async function main() {
   const synced = loadSyncedLinearIssueIds();
   const terms = ["client-incident", "ssf-pwa", "SSFitness client incident"];
   const issueById = new Map();
+  const hasTeamFilter = Boolean(optionalEnv("SSFITNESS_LINEAR_TEAM_ID"));
+
+  // First: pull completed issues by configured label/team filters (more reliable
+  // than text search alone).
+  const labeled = await listCompletedIncidentIssuesByLabels();
+  for (const issue of labeled) {
+    if (issue?.id) issueById.set(issue.id, issue);
+  }
 
   for (const term of terms) {
     const results = await searchCompletedIssues(term);
     for (const issue of results) {
       if (issue?.id) issueById.set(issue.id, issue);
+    }
+  }
+
+  // If nothing matched and a team filter is configured, retry without team
+  // scoping. This prevents a stale/incorrect SSFITNESS_LINEAR_TEAM_ID from
+  // causing a false "no-op" run.
+  if (!issueById.size && hasTeamFilter) {
+    const labeledNoTeam = await listCompletedIncidentIssuesByLabelsNoTeam();
+    for (const issue of labeledNoTeam) {
+      if (issue?.id) issueById.set(issue.id, issue);
+    }
+
+    for (const term of terms) {
+      const results = await searchCompletedIssues(term, { includeTeamFilter: false });
+      for (const issue of results) {
+        if (issue?.id) issueById.set(issue.id, issue);
+      }
     }
   }
 
@@ -375,8 +487,7 @@ async function main() {
     const { summary, commit_sha, incident_id } = summarizeIssue(details);
 
     const syncPayload = {
-      ...(incident_id ? { incident_id } : {}),
-      linear_issue_id: details.id,
+      ...(incident_id ? { incident_id } : { linear_issue_id: details.id }),
       linear_issue_url: details.url,
       title: details.title,
       summary,

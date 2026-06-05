@@ -58,12 +58,20 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - wger: self-hosted exercise/workout data source via `WGER_API_BASE_URL`.
 - PWA runtime: manifest, service worker, install-to-home-screen flow.
 
+## Production Booking And Payments (2026-06-01)
+
+- `/book` + `/api/bookings/checkout` + `/api/bookings/availability` — live on Cloudflare Worker `stryvfit-plus` (Ashley account).
+- Stripe Checkout + webhook at `/api/stripe/webhook` — confirms paid bookings and Google Calendar events.
+- Booking consent form is required in the `/book` scheduler before session bookings; the form URL defaults to the provided Google Form and can be overridden with `NEXT_PUBLIC_BOOKING_CONSENT_FORM_URL`.
+- Google Calendar failures no longer block booking confirmation; the app confirms the Supabase booking and files a support incident for calendar follow-up.
+- Trainer availability persisted in Supabase; admin PUT `/api/admin/booking-availability`.
+- Meal prep booking is **free** (Ideal Nutrition affiliate only).
+- See `docs/ASHLEY-LAUNCH-READY.md` for Ashley’s 5-minute verify list.
+
 ## Known Simulation And Pending Wiring
 
-- Client session state currently uses URL query params. `?session=remote` opens the remote countdown/workout path; no live booking-session lookup is wired yet.
-- Payment state currently uses `?pastDueDays=7` style demo state. Stripe/Supabase subscription state still needs production wiring.
-- Payment prompts intentionally appear only during phase progression, not on the home calendar.
-- Booking lockout should happen at 7+ days past due once production subscription state is connected.
+- Client phase flow (`ClientPhaseFlow`) still uses URL query params for remote workout countdown demos (`?session=remote`, `?pastDueDays=7`). This is separate from the production booking flow on `/book`.
+- Subscription past-due lockout on the phase flow is not yet tied to live Stripe subscription state.
 - "Post to client" is currently UX/stateful feedback. It is not a full persistence/publish pipeline until a backend write path is added.
 - `/admin/workouts` reads wger exercise data through the app proxy but does not yet write private wger routines.
 
@@ -82,6 +90,8 @@ Use `RUN_LIVE_INCIDENT_SMOKE=1 bun run smoke:support` only when Supabase and Lin
 
 ## Related Handoff Docs
 
+- `docs/ASHLEY-LAUNCH-READY.md`: client launch verify + Solvys deploy commands.
+- `docs/ASHLEY-REDEPLOY-CHECKLIST.md`: Cloudflare secret/DNS migration pack.
 - `docs/OPERATOR-GUIDE.md`: non-technical guide for client/admin app usage.
 - `docs/CHATGPT-CONTROL-PROTOCOL.md`: how ChatGPT/Codex should control and support the admin UI.
 - `docs/SUPPORT-PROTOCOL.md`: Solvys support engine and incident workflow.

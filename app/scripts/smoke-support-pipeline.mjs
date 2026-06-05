@@ -13,7 +13,12 @@ async function main() {
 
   const dryRun = await fetch(`${baseUrl}/api/incidents?dry_run=1`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(process.env.INCIDENT_WEBHOOK_SECRET
+        ? { 'x-incident-secret': process.env.INCIDENT_WEBHOOK_SECRET }
+        : {}),
+    },
     body: JSON.stringify(incident),
   });
   const dryRunJson = await dryRun.json();
@@ -21,7 +26,14 @@ async function main() {
     throw new Error(`Incident dry-run smoke failed: ${JSON.stringify(dryRunJson)}`);
   }
 
-  const health = await fetch(`${baseUrl}/api/incidents`, { cache: 'no-store' });
+  const health = await fetch(`${baseUrl}/api/incidents`, {
+    cache: 'no-store',
+    headers: {
+      ...(process.env.INCIDENT_WEBHOOK_SECRET
+        ? { 'x-incident-secret': process.env.INCIDENT_WEBHOOK_SECRET }
+        : {}),
+    },
+  });
   const healthJson = await health.json();
   if (!health.ok || !Array.isArray(healthJson.incidents) || !Array.isArray(healthJson.updates)) {
     throw new Error(`Incident health smoke failed: ${JSON.stringify(healthJson)}`);

@@ -1,12 +1,12 @@
-const CACHE_VERSION = 'v20';
+const CACHE_VERSION = 'v23';
 const STATIC_CACHE = `stryvfit-static-${CACHE_VERSION}`;
 const PAGE_CACHE = `stryvfit-pages-${CACHE_VERSION}`;
 const CORE_ROUTES = ['/', '/book', '/notes', '/meals', '/coach', '/admin/pulse'];
 const APP_SHELL = [
-  '/offline.html',
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/stryv-insignia.svg',
   '/stryv-logo.svg',
   '/stryv-logo-typography.svg',
   '/images/hero-training.jpg',
@@ -63,6 +63,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/images/') ||
     url.pathname.startsWith('/fonts/') ||
     url.pathname === '/manifest.webmanifest' ||
+    url.pathname === '/stryv-insignia.svg' ||
     url.pathname === '/stryv-logo.svg' ||
     url.pathname === '/stryv-logo-typography.svg'
   ) {
@@ -83,8 +84,7 @@ async function networkFirstPage(request) {
     return (
       (await cache.match(request)) ||
       (CORE_ROUTES.includes(url.pathname) ? await cache.match(url.pathname) : null) ||
-      caches.match('/book') ||
-      caches.match('/offline.html')
+      caches.match('/book')
     );
   }
 }

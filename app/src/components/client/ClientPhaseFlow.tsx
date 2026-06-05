@@ -18,10 +18,12 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ReactNode, TouchEvent } from 'react';
-import { GoogleScheduler } from '@/components/scheduling/GoogleScheduler';
+import { GoogleScheduler, type SchedulerBookingDraft } from '@/components/scheduling/GoogleScheduler';
 import { MealPrepPlanner } from '@/components/meals/MealPrepPlanner';
+import { SignOutButton } from '@/components/auth/SignOutButton';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { ThemeToggle, usePersistedTheme } from '@/components/ui/ThemeToggle';
+import { parseBookingService, type BookingServiceType } from '@/lib/bookingServices';
 
 type Phase = 'calendar' | 'workout' | 'meal-prep' | 'journal';
 type SessionMode = 'none' | 'remote' | 'in-person';
@@ -79,9 +81,16 @@ function getPaymentState(daysFromDue: number) {
   };
 }
 
-function useClientQueryState(): { sessionMode: SessionMode; daysFromDue: number } {
+function useClientQueryState(): {
+  sessionMode: SessionMode;
+  daysFromDue: number;
+  serviceType: BookingServiceType;
+  bookingStatus: string | null;
+} {
   const [mode, setMode] = useState<SessionMode>('none');
   const [daysFromDue, setDaysFromDue] = useState(0);
+  const [serviceType, setServiceType] = useState<BookingServiceType>('free');
+  const [bookingStatus, setBookingStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -89,21 +98,29 @@ function useClientQueryState(): { sessionMode: SessionMode; daysFromDue: number 
     const due = Number(params.get('pastDueDays') ?? 0);
     setMode(requested === 'remote' || requested === 'in-person' ? requested : 'none');
     setDaysFromDue(Number.isFinite(due) ? due : 0);
+    setServiceType(parseBookingService(params.get('service')));
+    setBookingStatus(params.get('booking'));
   }, []);
 
-  return { sessionMode: mode, daysFromDue };
+  return { sessionMode: mode, daysFromDue, serviceType, bookingStatus };
 }
 
 export function ClientPhaseFlow() {
-  const { sessionMode, daysFromDue } = useClientQueryState();
+  const { sessionMode, daysFromDue, serviceType, bookingStatus } = useClientQueryState();
   const paymentState = useMemo(() => getPaymentState(daysFromDue), [daysFromDue]);
   const hasSession = sessionMode !== 'none';
-  const [phase, setPhase] = useState<Phase>('meal-prep');
+  const [phase, setPhase] = useState<Phase>('calendar');
   const [menuOpen, setMenuOpen] = useState(false);
   const [countdown, setCountdown] = useState(12);
   const [workoutComplete, setWorkoutComplete] = useState(false);
   const [deliberating, setDeliberating] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [bookingMessage, setBookingMessage] = useState<string | null>(() => {
+    if (bookingStatus === 'success') return 'Payment received. We are confirming your calendar event.';
+    if (bookingStatus === 'confirmed') return 'You are booked. Your calendar confirmation is on the way.';
+    if (bookingStatus === 'cancelled') return 'Checkout was cancelled. Your time was released.';
+    return null;
+  });
   const [theme, setTheme] = usePersistedTheme('stryvfit-theme', 'dark');
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
@@ -134,10 +151,42 @@ export function ClientPhaseFlow() {
     deliberateNext(next);
   }
 
-  function startMockSession() {
-    setCountdown(0);
-    setWorkoutComplete(false);
-    setPhase('workout');
+  async function createBooking(draft: SchedulerBookingDraft) {
+    const res = await fetch('/api/bookings/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(draft),
+    });
+    const payload = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      checkoutUrl?: string;
+      redirectUrl?: string;
+      status?: string;
+      calendarStatus?: string;
+    };
+
+    if (payload.checkoutUrl) {
+      window.location.assign(payload.checkoutUrl);
+      return;
+    }
+
+    if (payload.redirectUrl) {
+      if (!res.ok) {
+        window.location.assign(payload.redirectUrl);
+        return;
+      }
+      window.history.replaceState(null, '', payload.redirectUrl);
+    }
+
+    if (!res.ok) {
+      throw new Error(payload.error ?? 'Unable to create booking');
+    }
+
+    setBookingMessage(
+      payload.calendarStatus === 'pending'
+        ? 'You are booked. Your calendar invite is being finalized by the team.'
+        : 'You are booked. Your calendar confirmation is on the way.'
+    );
   }
 
   function onTouchEnd(event: TouchEvent<HTMLDivElement>) {
@@ -170,6 +219,7 @@ export function ClientPhaseFlow() {
           <BrandWordmark className="w-[178px]" />
           <div className="flex items-center gap-2">
             <ThemeToggle theme={theme} onChange={setTheme} className="text-text" />
+            <SignOutButton compact className="bg-surface/70" />
           </div>
         </header>
 
@@ -215,8 +265,10 @@ export function ClientPhaseFlow() {
               hasSession={hasSession}
               countdown={countdown}
               bookingLocked={paymentState.bookingLocked}
+              serviceType={serviceType}
+              bookingMessage={bookingMessage}
               onPreviewWorkout={() => countdown === 0 && setPhase('workout')}
-              onBookSession={startMockSession}
+              onBookSession={createBooking}
             />
           )}
         </AnimatePresence>
@@ -245,15 +297,32 @@ function CalendarOnly({
   hasSession,
   countdown,
   bookingLocked,
+  serviceType,
+  bookingMessage,
   onPreviewWorkout,
   onBookSession,
 }: {
   hasSession: boolean;
   countdown: number;
   bookingLocked: boolean;
+  serviceType: BookingServiceType;
+  bookingMessage: string | null;
   onPreviewWorkout: () => void;
-  onBookSession: () => void;
+  onBookSession: (draft: SchedulerBookingDraft) => Promise<void>;
 }) {
+  const isFreeFirstSession = serviceType === 'free';
+  const isOnlineCoaching = serviceType.startsWith('online_coaching_');
+  const sessionTitle = isFreeFirstSession
+    ? 'StryvFit+ free first session'
+    : isOnlineCoaching
+      ? 'StryvFit+ online coaching session'
+      : 'StryvFit+ training session';
+  const sessionDescription = isFreeFirstSession
+    ? 'Free first session with Stryv Society Fitness. We will assess goals, movement, schedule, and the best coaching path.'
+    : isOnlineCoaching
+      ? 'Online coaching session with Stryv Society Fitness. Bring recent training notes, form videos, and questions for your coach.'
+      : 'Training session with Stryv Society Fitness. Bring water, training shoes, and any recent notes for your coach.';
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 18 }}
@@ -293,12 +362,22 @@ function CalendarOnly({
             </p>
           </div>
         ) : (
+          <>
+          {bookingMessage ? (
+            <div className="mb-4 rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
+              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Booking status</p>
+              <p className="mt-2 font-body text-sm leading-relaxed text-text-muted">{bookingMessage}</p>
+            </div>
+          ) : null}
           <GoogleScheduler
-            title="StryvFit+ training session"
-            description="Training session with Stryv Society Fitness. Bring water, training shoes, and any recent notes for your coach."
+            title={sessionTitle}
+            description={sessionDescription}
+            location={isOnlineCoaching ? 'Online' : 'Stryv Society Fitness'}
             durationMinutes={60}
+            serviceType={serviceType}
             onBookSession={onBookSession}
           />
+          </>
         )}
       </div>
     </motion.div>
@@ -632,6 +711,7 @@ function PaymentModal({ onClose, bookingLocked }: { onClose: () => void; booking
         <div className="mt-5 grid grid-cols-2 gap-2">
           <button
             type="button"
+            onClick={() => window.location.assign('/book?service=sessions_4')}
             className="ios-pill min-h-11 rounded-full bg-gold px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-bg"
           >
             Pay now

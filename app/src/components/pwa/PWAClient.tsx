@@ -1,86 +1,99 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Download, RefreshCw, WifiOff, X } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { reportIncident } from '@/lib/reportIncident';
 
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
-};
-
-const DISMISS_KEY = 'stryvfit-pwa-install-dismissed';
 const HAPTIC_SELECTOR = 'button, a[href], [role="button"], summary';
+const OPTIONAL_SERVICE_WORKER_ERRORS = [
+  /script .*\/sw\.js.* load failed/i,
+  /cannot update a null\/nonexistent service worker registration/i,
+  /cannot read properties of undefined \(reading 'update'\)/i,
+  /^rejected$/i,
+  /securityerror/i,
+  /only secure origins/i,
+];
 
-function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
+function eventLoadMessage(event: Event): string | null {
+  const target = event.target;
+
+  if (target instanceof HTMLScriptElement && target.src) {
+    return `Script ${target.src} load failed`;
+  }
+
+  if (target instanceof HTMLLinkElement && target.href) {
+    return `Resource ${target.href} load failed`;
+  }
+
+  return null;
+}
+
+function rejectionDetails(reason: unknown): { message: string; stack?: string; reason: string } | null {
+  if (reason instanceof Error) {
+    return { message: reason.message || 'Unhandled promise rejection', stack: reason.stack, reason: reason.message };
+  }
+
+  if (reason instanceof Event) {
+    const message = eventLoadMessage(reason);
+    if (!message) return null;
+    return { message, reason: reason.type || 'event' };
+  }
+
+  const reasonText = typeof reason === 'string' ? reason : String(reason);
+  if (!reasonText || reasonText === '[object Event]') return null;
+
+  return { message: reasonText, reason: reasonText };
+}
+
+function isServiceWorkerErrorOptional(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : error instanceof Event
+        ? eventLoadMessage(error) ?? error.type
+        : String(error);
+
+  return OPTIONAL_SERVICE_WORKER_ERRORS.some((pattern) => pattern.test(message));
+}
+
+function canRegisterServiceWorker(): boolean {
   return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+    'serviceWorker' in navigator &&
+    window.isSecureContext &&
+    (window.location.protocol === 'https:' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '::1')
   );
 }
 
-function isIos(): boolean {
-  if (typeof window === 'undefined') return false;
-  return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
-}
-
 export function PWAClient() {
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
   const [updateReady, setUpdateReady] = useState(false);
-  const [dismissed, setDismissed] = useState(true);
-
-  useEffect(() => {
-    setIsOnline(window.navigator.onLine);
-    setIsInstalled(isStandalone());
-    setDismissed(window.localStorage.getItem(DISMISS_KEY) === 'true');
-
-    const onOnline = () => setIsOnline(true);
-    const onOffline = () => setIsOnline(false);
-    const onInstalled = () => {
-      setIsInstalled(true);
-      setInstallPrompt(null);
-    };
-    const onBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as BeforeInstallPromptEvent);
-      setDismissed(window.localStorage.getItem(DISMISS_KEY) === 'true');
-    };
-
-    window.addEventListener('online', onOnline);
-    window.addEventListener('offline', onOffline);
-    window.addEventListener('appinstalled', onInstalled);
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-
-    return () => {
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('offline', onOffline);
-      window.removeEventListener('appinstalled', onInstalled);
-      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-    };
-  }, []);
 
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
+      const loadMessage = eventLoadMessage(event);
+      if (loadMessage && isServiceWorkerErrorOptional(loadMessage)) return;
+
       void reportIncident({
         source: 'client',
-        severity: 'high',
-        message: event.message || 'Unhandled browser error',
+        severity: loadMessage ? 'medium' : 'high',
+        message: loadMessage || event.message || 'Unhandled browser error',
         stack: event.error?.stack,
-        context: { filename: event.filename, lineno: event.lineno, colno: event.colno },
+        context: { filename: event.filename, lineno: event.lineno, colno: event.colno, eventType: event.type },
         admin_action: 'Auto-filed from global error listener.',
       });
     };
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const reason = event.reason;
+      const details = rejectionDetails(event.reason);
+      if (!details) return;
+
       void reportIncident({
         source: 'client',
         severity: 'medium',
-        message: reason instanceof Error ? reason.message : 'Unhandled promise rejection',
-        stack: reason instanceof Error ? reason.stack : undefined,
-        context: { reason: String(reason) },
+        message: details.message,
+        stack: details.stack,
+        context: { reason: details.reason },
         admin_action: 'Auto-filed from unhandled promise rejection.',
       });
     };
@@ -116,7 +129,7 @@ export function PWAClient() {
   }, []);
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
+    if (!canRegisterServiceWorker()) return;
 
     let mounted = true;
 
@@ -147,7 +160,21 @@ export function PWAClient() {
 
       try {
         const registration = await navigator.serviceWorker.register('/sw.js');
-        await registration.update();
+        if (!registration) return;
+
+        try {
+          await registration.update();
+        } catch (error) {
+          if (!isServiceWorkerErrorOptional(error)) {
+            void reportIncident({
+              source: 'pwa',
+              severity: 'low',
+              message: error instanceof Error ? error.message : 'Service worker update failed',
+              stack: error instanceof Error ? error.stack : undefined,
+              admin_action: 'Auto-filed from PWA setup.',
+            });
+          }
+        }
 
         if (registration.waiting && navigator.serviceWorker.controller) {
           setUpdateReady(true);
@@ -164,6 +191,8 @@ export function PWAClient() {
           });
         });
       } catch (error) {
+        if (isServiceWorkerErrorOptional(error)) return;
+
         void reportIncident({
           source: 'pwa',
           severity: 'medium',
@@ -186,16 +215,6 @@ export function PWAClient() {
   }, []);
 
   const banner = useMemo(() => {
-    if (!isOnline) {
-      return {
-        icon: WifiOff,
-        tone: 'border-border bg-surface-2 text-text',
-        title: 'Offline mode',
-        body: 'Book, Notes, Meals, and Coach are saved for quick access. Live actions resume when you reconnect.',
-        action: null,
-      };
-    }
-
     if (updateReady) {
       return {
         icon: RefreshCw,
@@ -206,35 +225,14 @@ export function PWAClient() {
       };
     }
 
-    if (!isInstalled && !dismissed && (installPrompt || isIos())) {
-      return {
-        icon: Download,
-        tone: 'border-gold/25 bg-surface-2 text-text',
-        title: 'Install StryvFit+',
-        body: installPrompt
-          ? 'Add the app to your home screen for one-tap booking and coach access.'
-          : 'On iPhone, use Share, then Add to Home Screen.',
-        action: installPrompt ? ('install' as const) : null,
-      };
-    }
-
     return null;
-  }, [dismissed, installPrompt, isInstalled, isOnline, updateReady]);
+  }, [updateReady]);
 
   if (!banner) return null;
 
   const Icon = banner.icon;
 
   async function handleAction() {
-    if (banner?.action === 'install' && installPrompt) {
-      await installPrompt.prompt();
-      const choice = await installPrompt.userChoice;
-      if (choice.outcome === 'accepted') {
-        setIsInstalled(true);
-      }
-      setInstallPrompt(null);
-    }
-
     if (banner?.action === 'update') {
       const registration = await navigator.serviceWorker.getRegistration();
       registration?.waiting?.postMessage({ type: 'SKIP_WAITING' });
@@ -242,11 +240,6 @@ export function PWAClient() {
         window.location.reload();
       }
     }
-  }
-
-  function dismiss() {
-    window.localStorage.setItem(DISMISS_KEY, 'true');
-    setDismissed(true);
   }
 
   return (
@@ -264,20 +257,10 @@ export function PWAClient() {
               onClick={handleAction}
               className="ios-pill mt-3 inline-flex min-h-9 items-center justify-center rounded-full bg-gold px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-bg transition-colors hover:bg-gold-deep"
             >
-              {banner.action === 'install' ? 'Install app' : 'Refresh app'}
+              Refresh app
             </button>
           ) : null}
         </div>
-        {isOnline && !updateReady ? (
-          <button
-            type="button"
-            aria-label="Dismiss install prompt"
-            onClick={dismiss}
-            className="ios-pill rounded-full p-1 text-text-dim transition-colors hover:text-text"
-          >
-            <X className="h-4 w-4" strokeWidth={1.8} />
-          </button>
-        ) : null}
       </div>
     </aside>
   );

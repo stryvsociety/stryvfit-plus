@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 
 export const SECTIONS = [
   'hero',
-  'comparison',
   'method',
   'pricing',
   'winning',
@@ -16,7 +15,6 @@ export type SectionId = (typeof SECTIONS)[number];
 
 export const NAV_ITEMS: { id: SectionId; label: string; scrollOffset?: number; mobileScrollOffset?: number }[] = [
   { id: 'hero', label: 'Stryv Society' },
-  { id: 'comparison', label: 'The Difference', scrollOffset: 600, mobileScrollOffset: 0 },
   { id: 'method', label: 'The Method', scrollOffset: 300, mobileScrollOffset: 640 },
   { id: 'pricing', label: 'Pricing', scrollOffset: 100, mobileScrollOffset: 20 },
   { id: 'winning', label: 'StryvDash', scrollOffset: 100, mobileScrollOffset: 0 },
@@ -26,7 +24,6 @@ export const NAV_ITEMS: { id: SectionId; label: string; scrollOffset?: number; m
 
 const SECTION_BG: Record<SectionId, string> = {
   hero: '#070E13',
-  comparison: '#070E13',
   method: '#0A0A0A',
   pricing: '#070E13',
   winning: '#0A0A0A',

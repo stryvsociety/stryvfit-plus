@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { serviceClient } from '@/lib/supabase';
 import { isValidE164 } from '@/lib/imessage';
+import { requireApiAdmin } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  const admin = await requireApiAdmin();
+  if (admin instanceof NextResponse) return admin;
+
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== 'object') {
     return NextResponse.json({ error: 'invalid body' }, { status: 400 });
@@ -17,7 +21,7 @@ export async function POST(req: Request) {
   const trainer_name =
     typeof payload.trainer_name === 'string' && payload.trainer_name.trim().length > 0
       ? payload.trainer_name.trim()
-      : 'Sam';
+      : 'Ashley';
 
   if (trainer_phone && !isValidE164(trainer_phone)) {
     return NextResponse.json({ error: 'phone must be E.164' }, { status: 400 });

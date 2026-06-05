@@ -8,7 +8,7 @@ insert into public.app_settings (
 )
 values (
   1,
-  'Sam',
+  'Ashley',
   null,
   24,
   false,

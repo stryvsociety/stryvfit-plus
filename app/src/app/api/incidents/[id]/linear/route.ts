@@ -1,19 +1,25 @@
 import { NextResponse } from 'next/server';
+import { requireApiAdmin } from '@/lib/auth';
 import { createLinearIssueForIncident } from '@/lib/linear';
 import { serviceClient } from '@/lib/supabase';
 import type { StoredIncident } from '@/lib/incidents';
 
 export const runtime = 'nodejs';
 
-function isAuthorized(req: Request): boolean {
+function isSecretAuthorized(req: Request): boolean {
   const secret = process.env.INCIDENT_WEBHOOK_SECRET;
   return Boolean(secret && req.headers.get('x-incident-secret') === secret);
 }
 
+async function requireIncidentSendAccess(req: Request): Promise<NextResponse | null> {
+  if (isSecretAuthorized(req)) return null;
+  const admin = await requireApiAdmin();
+  return admin instanceof NextResponse ? admin : null;
+}
+
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const accessError = await requireIncidentSendAccess(req);
+  if (accessError) return accessError;
 
   const { id } = await params;
   const sb = serviceClient();

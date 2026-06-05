@@ -10,6 +10,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Stryv Wordmark';
+  src: url('/fonts/stryv-wordmark.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
   --bg: #070E13;
@@ -183,7 +191,7 @@ html, body {
 
 .logo-wordmark {
   display: block;
-  aspect-ratio: 2057 / 286;
+  aspect-ratio: 1136 / 142;
   background-color: var(--text);
   background-image: linear-gradient(
     105deg,
@@ -206,6 +214,34 @@ button:hover .logo-wordmark,
 .logo-wordmark:hover {
   animation: logo-shimmer 900ms ease-out;
   filter: drop-shadow(0 0 14px rgba(242, 79, 9, 0.36));
+  transform: translateY(-1px);
+}
+
+.solvys-shimmer-link {
+  display: inline-block;
+  color: #B8B8B8;
+  background-image: linear-gradient(
+    105deg,
+    #B8B8B8 0%,
+    #B8B8B8 34%,
+    var(--gold) 48%,
+    #FFFFFF 52%,
+    var(--gold) 66%,
+    #B8B8B8 100%
+  );
+  background-position: 120% 0;
+  background-size: 260% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  transition: color 0.25s ease, filter 0.25s ease, transform 0.25s ease;
+}
+
+.solvys-shimmer-link:hover,
+.solvys-shimmer-link:focus-visible {
+  animation: logo-shimmer 900ms ease-out;
+  color: transparent;
+  filter: drop-shadow(0 0 12px rgba(242, 79, 9, 0.34));
+  outline: none;
   transform: translateY(-1px);
 }
 
@@ -334,7 +370,9 @@ button:hover .logo-wordmark,
 @media (prefers-reduced-motion: reduce) {
   a:hover .logo-wordmark,
   button:hover .logo-wordmark,
-  .logo-wordmark:hover {
+  .logo-wordmark:hover,
+  .solvys-shimmer-link:hover,
+  .solvys-shimmer-link:focus-visible {
     animation: none;
     background-position: 50% 0;
   }

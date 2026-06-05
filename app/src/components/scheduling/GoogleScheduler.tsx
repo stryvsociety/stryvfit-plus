@@ -1,20 +1,51 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Ban, CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, Lock, Unlock } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Ban,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ExternalLink,
+  Lock,
+  Plus,
+  ShieldCheck,
+  Unlock,
+  X,
+} from 'lucide-react';
 import { combineDateAndTime, googleCalendarEventUrl } from '@/lib/googleCalendar';
+import type { BookingServiceType } from '@/lib/bookingServices';
 import { reportIncident } from '@/lib/reportIncident';
+import { BOOKING_CONSENT_FORM_URL, bookingRequiresConsent } from '@/lib/bookingConsent';
 import {
   buildAvailableTimes,
-  dateKey,
+  combineBookingTzDateAndTime,
   DEFAULT_BOOKING_AVAILABILITY,
-  readBookingAvailability,
-  saveBookingAvailability,
+  formatCalendarDateKey,
+  normalizeStartTimes,
+  parseBookingAvailability,
   toggleBlockedSlot,
   type BookingAvailability,
 } from '@/lib/bookingAvailability';
 
 const durationOptions = [30, 60];
+
+type RemoteSlot = {
+  time: string;
+  available: boolean;
+  reason: string | null;
+};
+
+export type SchedulerBookingDraft = {
+  serviceType: BookingServiceType;
+  startsAt: string;
+  endsAt: string;
+  durationMinutes: number;
+  title: string;
+  description: string;
+  consentAcknowledged?: boolean;
+};
 
 function normalizeDuration(durationMinutes: number): number {
   return durationOptions.includes(durationMinutes) ? durationMinutes : durationOptions[0];
@@ -91,6 +122,7 @@ export function GoogleScheduler({
   durationMinutes = 45,
   location = 'Stryv Society Fitness',
   context,
+  serviceType = 'free',
   variant = 'card',
   onBookSession,
   manageAvailability = false,
@@ -100,8 +132,9 @@ export function GoogleScheduler({
   durationMinutes?: number;
   location?: string;
   context?: string;
+  serviceType?: BookingServiceType;
   variant?: 'card' | 'timeline';
-  onBookSession?: () => void;
+  onBookSession?: (draft: SchedulerBookingDraft) => Promise<void> | void;
   manageAvailability?: boolean;
 }) {
   const [availability, setAvailability] = useState<BookingAvailability>(DEFAULT_BOOKING_AVAILABILITY);
@@ -113,41 +146,127 @@ export function GoogleScheduler({
   const times = useMemo(() => buildAvailableTimes(availability, selectedDuration), [availability, selectedDuration]);
   const [selectedTime, setSelectedTime] = useState(times[0]);
   const [mockBooked, setMockBooked] = useState(false);
-  const selectedDateKey = dateKey(selectedDate);
+  const [bookingPending, setBookingPending] = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [consentAcknowledged, setConsentAcknowledged] = useState(false);
+  const [remoteSlots, setRemoteSlots] = useState<RemoteSlot[] | null>(null);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const selectedDateKey = formatCalendarDateKey(selectedDate);
+  const bookingCtaLabel = serviceType === 'free' ? 'Claim Free Session' : 'Book Session';
+  const requiresConsent = bookingRequiresConsent(serviceType);
   const blockedTimes = useMemo(
     () => availability.blockedSlots[selectedDateKey] ?? [],
     [availability.blockedSlots, selectedDateKey]
   );
+  const displayTimes = remoteSlots?.map((slot) => slot.time) ?? times;
   const selectedTimeBlocked = blockedTimes.includes(selectedTime);
+  const bookingButtonLabel = slotsLoading
+    ? 'Loading Times'
+    : bookingPending
+      ? 'Checking Slot'
+      : mockBooked
+        ? 'Session Booked'
+        : bookingCtaLabel;
+  const bookingButtonSubtext = mockBooked
+    ? 'Confirmation started'
+    : requiresConsent && !consentAcknowledged
+      ? 'Consent required'
+      : serviceType === 'free'
+        ? 'No card required'
+        : 'Secure checkout';
 
   useEffect(() => {
-    const refresh = () => setAvailability(readBookingAvailability());
-    refresh();
-    window.addEventListener('storage', refresh);
-    window.addEventListener('stryvfit-booking-availability', refresh);
+    if (!manageAvailability) return;
+    let cancelled = false;
+
+    async function loadTrainerRules() {
+      try {
+        const res = await fetch('/api/admin/booking-availability');
+        const data = (await res.json()) as { availability?: unknown };
+        if (!cancelled && data.availability) {
+          setAvailability(parseBookingAvailability(data.availability));
+        }
+      } catch {
+        // keep defaults
+      }
+    }
+
+    void loadTrainerRules();
     return () => {
-      window.removeEventListener('storage', refresh);
-      window.removeEventListener('stryvfit-booking-availability', refresh);
+      cancelled = true;
     };
-  }, []);
+  }, [manageAvailability]);
 
   useEffect(() => {
-    const nextAvailable = times.find((time) => !blockedTimes.includes(time)) ?? times[0];
-    if (!times.includes(selectedTime) || (!manageAvailability && blockedTimes.includes(selectedTime))) {
+    if (!onBookSession || manageAvailability) {
+      setRemoteSlots(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSlots() {
+      setSlotsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/bookings/availability?date=${formatCalendarDateKey(selectedDate)}&durationMinutes=${selectedDuration}`
+        );
+        const data = (await res.json()) as { times?: RemoteSlot[]; availability?: unknown };
+        if (!cancelled) {
+          if (data.availability) {
+            setAvailability(parseBookingAvailability(data.availability));
+          }
+          setRemoteSlots(Array.isArray(data.times) ? data.times : null);
+        }
+      } catch {
+        if (!cancelled) setRemoteSlots(null);
+      } finally {
+        if (!cancelled) setSlotsLoading(false);
+      }
+    }
+
+    void loadSlots();
+    return () => {
+      cancelled = true;
+    };
+  }, [manageAvailability, onBookSession, selectedDate, selectedDuration]);
+
+  const isSlotSelectable = useCallback(
+    (time: string): boolean => {
+      if (manageAvailability) return true;
+      const remote = remoteSlots?.find((slot) => slot.time === time);
+      if (remote) return remote.available;
+      return !blockedTimes.includes(time);
+    },
+    [blockedTimes, manageAvailability, remoteSlots]
+  );
+
+  useEffect(() => {
+    const nextAvailable = displayTimes.find((time) => isSlotSelectable(time)) ?? displayTimes[0];
+    if (!displayTimes.includes(selectedTime) || !isSlotSelectable(selectedTime)) {
       setSelectedTime(nextAvailable);
     }
-  }, [blockedTimes, manageAvailability, selectedTime, times]);
+  }, [displayTimes, isSlotSelectable, selectedTime]);
+
+  async function persistAvailability(next: BookingAvailability) {
+    if (!manageAvailability) return;
+    await fetch('/api/admin/booking-availability', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ availability: next }),
+    });
+  }
 
   function updateAvailability(patch: Partial<BookingAvailability>) {
     const next = { ...availability, ...patch };
     setAvailability(next);
-    saveBookingAvailability(next);
+    void persistAvailability(next);
   }
 
   function toggleSelectedBlock() {
     const next = toggleBlockedSlot(availability, selectedDate, selectedTime);
     setAvailability(next);
-    saveBookingAvailability(next);
+    void persistAvailability(next);
   }
 
   const goToCycle = (nextCycle: number) => {
@@ -180,6 +299,39 @@ export function GoogleScheduler({
       return 'https://calendar.google.com/calendar/render?action=TEMPLATE';
     }
   }, [context, description, location, selectedDate, selectedDuration, selectedTime, title]);
+
+  async function bookSelectedSession() {
+    if (!onBookSession || bookingPending) return;
+    if (requiresConsent && !consentAcknowledged) {
+      setBookingError('Open the consent form and acknowledge it before booking.');
+      return;
+    }
+    if (!isSlotSelectable(selectedTime)) {
+      setBookingError('That time is no longer available. Pick another block.');
+      return;
+    }
+    const start = combineBookingTzDateAndTime(formatCalendarDateKey(selectedDate), selectedTime);
+    const end = new Date(start.getTime() + selectedDuration * 60 * 1000);
+
+    setBookingPending(true);
+    setBookingError(null);
+    try {
+      await onBookSession({
+        serviceType,
+        startsAt: start.toISOString(),
+        endsAt: end.toISOString(),
+        durationMinutes: selectedDuration,
+        title,
+        description: [description, context].filter(Boolean).join('\n\n'),
+        consentAcknowledged: requiresConsent ? consentAcknowledged : undefined,
+      });
+      setMockBooked(true);
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : 'Booking failed');
+    } finally {
+      setBookingPending(false);
+    }
+  }
 
   if (variant === 'timeline') {
     const selectedLabel = formatFullDate(selectedDate);
@@ -304,9 +456,9 @@ export function GoogleScheduler({
             </div>
             <p className="mt-3 font-headline text-2xl uppercase leading-none text-[#151515]">{selectedLabel}</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              {times.map((time) => {
+              {displayTimes.map((time) => {
                 const isSelected = selectedTime === time;
-                const isBlocked = blockedTimes.includes(time);
+                const isBlocked = !isSlotSelectable(time);
                 return (
                   <button
                     key={time}
@@ -454,9 +606,9 @@ export function GoogleScheduler({
           <p className="font-caption text-[10px] uppercase tracking-[0.16em]">Choose time</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {times.map((time) => {
+          {displayTimes.map((time) => {
             const isSelected = selectedTime === time;
-            const isBlocked = blockedTimes.includes(time);
+            const isBlocked = !isSlotSelectable(time);
             return (
               <button
                 key={time}
@@ -478,21 +630,64 @@ export function GoogleScheduler({
         </div>
       </div>
 
+      {onBookSession && requiresConsent ? (
+        <div className="mt-5 rounded-md border border-gold/25 bg-surface-2/70 p-4 shadow-glass">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-gold" strokeWidth={1.7} />
+            <div className="min-w-0 flex-1">
+              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">
+                Consent form
+              </p>
+              <p className="mt-2 font-body text-sm leading-relaxed text-text-muted">
+                Open the client consent form before confirming your session.
+              </p>
+              <a
+                href={BOOKING_CONSENT_FORM_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-gold/40 px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-gold transition hover:border-gold hover:text-text"
+              >
+                Open Consent Form <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </a>
+              <label className="mt-4 flex items-start gap-3 rounded-md border border-border bg-bg/60 p-3">
+                <input
+                  type="checkbox"
+                  checked={consentAcknowledged}
+                  onChange={(event) => {
+                    setConsentAcknowledged(event.target.checked);
+                    if (event.target.checked && bookingError?.toLowerCase().includes('consent')) {
+                      setBookingError(null);
+                    }
+                  }}
+                  className="mt-1 h-4 w-4 rounded border-border accent-gold"
+                />
+                <span className="font-body text-sm leading-relaxed text-text-muted">
+                  I understand the consent form is required before my first session.
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {onBookSession ? (
         <button
           type="button"
-          onClick={() => {
-            setMockBooked(true);
-            onBookSession();
-          }}
-          className="ios-pill mt-5 inline-flex min-h-14 w-full flex-col items-center justify-center rounded-full bg-gold px-4 text-bg transition-colors hover:bg-gold-deep"
+          onClick={bookSelectedSession}
+          disabled={bookingPending || slotsLoading || (requiresConsent && !consentAcknowledged)}
+          className="ios-pill mt-5 inline-flex min-h-14 w-full flex-col items-center justify-center rounded-full bg-gold px-4 text-bg transition-colors hover:bg-gold-deep disabled:cursor-not-allowed disabled:opacity-55"
         >
           <span className="font-control text-sm font-semibold uppercase tracking-[0.08em]">
-            {mockBooked ? 'Session Booked' : 'Book Session'}
+            {bookingButtonLabel}
           </span>
           <span className="mt-1 font-caption text-[8px] uppercase tracking-[0.12em] opacity-75">
-            {mockBooked ? 'Ready to continue' : 'Mock booking flow'}
+            {bookingButtonSubtext}
           </span>
+          {bookingError ? (
+            <span className="mt-2 max-w-xs text-center font-body text-[11px] normal-case tracking-normal text-bg/80">
+              {bookingError}
+            </span>
+          ) : null}
         </button>
       ) : (
         <a
@@ -526,9 +721,21 @@ function BookingAvailabilityControls({
   selectedTime: string;
   onChange: (patch: Partial<BookingAvailability>) => void;
 }) {
-  const selectedKey = dateKey(selectedDate);
+  const [startTimeDraft, setStartTimeDraft] = useState(availability.startTimes[0] ?? availability.firstStart);
+  const selectedKey = formatCalendarDateKey(selectedDate);
   const blockedSlots = availability.blockedSlots[selectedKey] ?? [];
   const generatedTimes = buildAvailableTimes(availability, durationMinutes);
+  const exactStarts = availability.startTimes ?? [];
+
+  function addExactStart() {
+    const next = normalizeStartTimes([...exactStarts, startTimeDraft]);
+    if (next.length === exactStarts.length) return;
+    onChange({ startTimes: next });
+  }
+
+  function removeExactStart(time: string) {
+    onChange({ startTimes: exactStarts.filter((start) => start !== time) });
+  }
 
   return (
     <section className="mt-4 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-4">
@@ -549,7 +756,7 @@ function BookingAvailabilityControls({
           </p>
         </div>
         <div className="rounded-full border border-[#dedbd4] bg-white px-3 py-2 font-caption text-[9px] uppercase tracking-[0.12em] text-[#817b72]">
-          {generatedTimes.length} starts · {durationMinutes}m session
+          {generatedTimes.length} starts · {exactStarts.length > 0 ? 'Exact' : 'Generated'}
         </div>
       </div>
 
@@ -588,6 +795,58 @@ function BookingAvailabilityControls({
             ))}
           </select>
         </label>
+      </div>
+
+      <div className="mt-4 rounded-md border border-[#dedbd4] bg-white p-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Exact starts</p>
+            <p className="mt-1 font-body text-xs text-[#66615a]">
+              Add trainer-approved starts like 6:30, 7:30, and 8:30.
+            </p>
+          </div>
+          <div className="flex w-full gap-2 sm:w-auto">
+            <input
+              type="time"
+              value={startTimeDraft}
+              onChange={(event) => setStartTimeDraft(event.target.value)}
+              className="min-h-11 min-w-0 flex-1 rounded-full border border-[#dedbd4] bg-[#fbfaf8] px-3 font-control text-sm font-semibold text-[#151515] outline-none focus:border-[#f24f09] sm:w-36 sm:flex-none"
+            />
+            <button
+              type="button"
+              onClick={addExactStart}
+              className="ios-pill inline-flex min-h-11 items-center justify-center rounded-full bg-[#151515] px-4 text-white"
+              aria-label="Add exact start time"
+            >
+              <Plus className="h-4 w-4" strokeWidth={1.8} />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {exactStarts.length === 0 ? (
+            <p className="rounded-full border border-[#dedbd4] bg-[#fbfaf8] px-3 py-2 font-body text-xs text-[#66615a]">
+              Generated range is active until an exact start is added.
+            </p>
+          ) : (
+            exactStarts.map((time) => (
+              <span
+                key={time}
+                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#f24f09]/35 bg-[#fff3ec] pl-3 pr-1 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-[#151515]"
+              >
+                {formatTime(time)}
+                <button
+                  type="button"
+                  onClick={() => removeExactStart(time)}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#817b72] transition hover:bg-white hover:text-[#151515]"
+                  aria-label={`Remove ${formatTime(time)}`}
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+                </button>
+              </span>
+            ))
+          )}
+        </div>
       </div>
 
       <div className="mt-4 rounded-md border border-[#dedbd4] bg-white p-3">

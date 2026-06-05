@@ -32,7 +32,7 @@ export default function WinningSection() {
           <p className="font-caption text-[10px] tracking-[0.2em] uppercase text-gold/60 mb-4">
             STRYVDASH
           </p>
-          <h2 className="font-headline text-4xl md:text-6xl tracking-normal text-text leading-[1.1]">
+          <h2 className="font-section text-4xl md:text-6xl tracking-normal text-text leading-[1.02]">
             From effort,
             <br />
             <span className="text-gold">results.</span>
@@ -84,8 +84,8 @@ export default function WinningSection() {
         >
           <a
             href="/book"
-            className="inline-flex items-center px-10 py-4 bg-gold text-bg font-sub text-sm
-                       uppercase tracking-[0.15em] transition-all duration-300 hover:bg-gold/90
+            className="inline-flex items-center px-10 py-4 bg-gold text-bg font-accent text-sm
+                       uppercase tracking-[0.18em] transition-all duration-300 hover:bg-gold/90
                        rounded-lg shadow-gold-glow"
           >
             Claim Your Free Session

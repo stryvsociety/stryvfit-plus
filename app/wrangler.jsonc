@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stryvfit-plus",
+  "account_id": "8a3f2e4671b2ce8cca031fb0ce8ecfe8",
   "main": ".open-next/worker.js",
   "workers_dev": true,
   "compatibility_date": "2026-05-18",
@@ -22,23 +23,34 @@
   "routes": [
     {
       "pattern": "stryvsocietyfit.com/*",
-      "zone_id": "4983dc13cab005664bbcd554c936df73"
+      "zone_id": "22998ccbcc56665c9e7f3ca5315981e7"
     },
     {
       "pattern": "www.stryvsocietyfit.com/*",
-      "zone_id": "4983dc13cab005664bbcd554c936df73"
+      "zone_id": "22998ccbcc56665c9e7f3ca5315981e7"
     },
     {
       "pattern": "app.stryvsocietyfit.com/*",
-      "zone_id": "4983dc13cab005664bbcd554c936df73"
+      "zone_id": "22998ccbcc56665c9e7f3ca5315981e7"
+    },
+    {
+      "pattern": "www.app.stryvsocietyfit.com/*",
+      "zone_id": "22998ccbcc56665c9e7f3ca5315981e7"
     },
     {
       "pattern": "book.stryvsocietyfit.com/*",
-      "zone_id": "4983dc13cab005664bbcd554c936df73"
+      "zone_id": "22998ccbcc56665c9e7f3ca5315981e7"
+    },
+    {
+      "pattern": "admin.stryvsocietyfit.com/*",
+      "zone_id": "22998ccbcc56665c9e7f3ca5315981e7"
     }
   ],
   "vars": {
     "NEXT_PUBLIC_APP_URL": "https://app.stryvsocietyfit.com",
+    "NEXT_PUBLIC_PUBLIC_URL": "https://stryvsocietyfit.com",
+    "NEXT_PUBLIC_ADMIN_CANONICAL_URL": "https://stryvsocietyfit.com",
+    "NEXT_PUBLIC_CLERK_PROXY_URL": "https://stryvsocietyfit.com/__clerk",
     "NEXT_PUBLIC_CAL_ORIGIN": "https://cal.stryvsocietyfit.com",
     "NEXT_PUBLIC_CAL_USERNAME": "stryv",
     "NEXT_PUBLIC_CAL_EVENT_FREE": "free-first-session",

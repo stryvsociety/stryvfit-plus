@@ -5,6 +5,7 @@ import {
   type IncidentSeverity,
   type IncidentSource,
   fingerprintIncident,
+  interpretIncident,
 } from '@/lib/incidents';
 
 type Context = Record<string, unknown>;
@@ -22,19 +23,27 @@ export async function reportIncident(input: {
   context?: Context;
   admin_action?: string;
 }) {
+  const currentRoute = route();
   const payload: IncidentPayload = {
     source: input.source,
-    route: route(),
+    route: currentRoute,
     message: input.message,
     severity: input.severity ?? 'medium',
     fingerprint: fingerprintIncident({
       source: input.source,
-      route: route(),
+      route: currentRoute,
       message: input.message,
     }),
     stack: input.stack,
-    context: input.context,
     admin_action: input.admin_action,
+  };
+  const interpretation = interpretIncident({ ...payload, context: input.context });
+  payload.context = {
+    ...input.context,
+    plainLanguageTitle: interpretation.title,
+    plainLanguageSummary: interpretation.summary,
+    plainLanguageUserAction: interpretation.userAction,
+    solvysSupportNote: interpretation.supportNote,
   };
 
   try {

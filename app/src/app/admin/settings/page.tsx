@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/Card';
 import { TrainerPhoneForm } from '@/components/settings/TrainerPhoneForm';
 import { serviceClient } from '@/lib/supabase';
 import { captureServerIncident } from '@/lib/serverIncidents';
+import { requireAdminUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ async function loadSettings() {
       .single();
     return {
       trainer_phone: (data?.trainer_phone as string | null) ?? '',
-      trainer_name: (data?.trainer_name as string | null) ?? 'Sam',
+      trainer_name: (data?.trainer_name as string | null) ?? 'Ashley',
     };
   } catch (error) {
     try {
@@ -28,11 +29,12 @@ async function loadSettings() {
         admin_action: 'Auto-filed from admin settings server load.',
       });
     } catch {}
-    return { trainer_phone: '', trainer_name: 'Sam' };
+    return { trainer_phone: '', trainer_name: 'Ashley' };
   }
 }
 
 export default async function AdminSettingsPage() {
+  await requireAdminUser();
   const settings = await loadSettings();
   return (
     <AppShell>

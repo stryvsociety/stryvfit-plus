@@ -1,7 +1,9 @@
 import { AppShell } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
+import { requireFirstSessionBooked } from '@/lib/auth';
 
-export default function NotesPage() {
+export default async function NotesPage() {
+  await requireFirstSessionBooked();
   return (
     <AppShell>
       <header className="mb-6">

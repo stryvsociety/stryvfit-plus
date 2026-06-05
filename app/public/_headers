@@ -7,6 +7,3 @@
 
 /manifest.webmanifest
   Cache-Control: public,max-age=3600
-
-/offline.html
-  Cache-Control: no-cache

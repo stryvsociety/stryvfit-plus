@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   fingerprintIncident,
+  interpretIncident,
   linearPriorityForSeverity,
   validateIncidentPayload,
 } from '../src/lib/incidents';
@@ -43,5 +44,31 @@ describe('incident utilities', () => {
     expect(linearPriorityForSeverity('high')).toBe(2);
     expect(linearPriorityForSeverity('medium')).toBe(3);
     expect(linearPriorityForSeverity('low')).toBe(4);
+  });
+
+  test('translates database incidents for non-technical users', () => {
+    const interpretation = interpretIncident({
+      source: 'supabase',
+      route: '/admin/pulse',
+      message: 'PGRST205 relation public.bookings does not exist',
+      severity: 'high',
+    });
+
+    expect(interpretation.title).toBe('Database Error');
+    expect(interpretation.summary).toContain('Admin dashboard');
+    expect(interpretation.technicalSummary).toContain('PGRST205');
+  });
+
+  test('keeps service-worker URLs behind app update copy', () => {
+    const interpretation = interpretIncident({
+      source: 'pwa',
+      route: '/sign-in-admin',
+      message: 'Script https://app.stryvsocietyfit.com/sw.js load failed',
+      severity: 'medium',
+    });
+
+    expect(interpretation.title).toBe('App Update Error');
+    expect(interpretation.summary).toContain('installed app shell');
+    expect(interpretation.technicalSummary).toContain('https://app.stryvsocietyfit.com/sw.js');
   });
 });

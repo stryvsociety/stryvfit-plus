@@ -1,7 +1,9 @@
 import { AppShell } from '@/components/layout/AppShell';
 import { MealPrepPlanner } from '@/components/meals/MealPrepPlanner';
+import { requireFirstSessionBooked } from '@/lib/auth';
 
-export default function MealsPage() {
+export default async function MealsPage() {
+  await requireFirstSessionBooked();
   return (
     <AppShell>
       <header className="mb-6">

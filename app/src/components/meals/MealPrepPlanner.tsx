@@ -5,7 +5,7 @@ import { CalendarDays, Check, ChevronDown, ExternalLink, MessageSquareText, Refr
 import type { IdealNutritionMeal } from '@/types';
 import { buildPulseBrief } from '@/lib/idealNutrition';
 import { reportIncident } from '@/lib/reportIncident';
-import { GoogleScheduler } from '@/components/scheduling/GoogleScheduler';
+import { GoogleScheduler, type SchedulerBookingDraft } from '@/components/scheduling/GoogleScheduler';
 import { enrichClientRequest, saveClientRequest, type ClientRequestKind } from '@/lib/clientRequests';
 
 type ApiResponse = {
@@ -148,7 +148,31 @@ export function MealPrepPlanner({ admin = false }: { admin?: boolean }) {
     window.setTimeout(() => setSentState(null), 2200);
   }
 
-  function completeMockBooking() {
+  async function createMealPrepBooking(draft: SchedulerBookingDraft) {
+    const res = await fetch('/api/bookings/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(draft),
+    });
+    const payload = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      checkoutUrl?: string;
+      redirectUrl?: string;
+    };
+
+    if (!res.ok) {
+      throw new Error(payload.error ?? 'Unable to create meal-prep booking');
+    }
+
+    if (payload.checkoutUrl) {
+      window.location.assign(payload.checkoutUrl);
+      return;
+    }
+
+    if (payload.redirectUrl) {
+      window.history.replaceState(null, '', payload.redirectUrl);
+    }
+
     setBookingSuccess(true);
     window.setTimeout(() => {
       setBookingSuccess(false);
@@ -379,7 +403,8 @@ export function MealPrepPlanner({ admin = false }: { admin?: boolean }) {
                 description="Review Ideal Nutrition picks and set the weekly meal-prep rhythm."
                 durationMinutes={30}
                 context={pulseContext}
-                onBookSession={completeMockBooking}
+                serviceType="meal_prep"
+                onBookSession={createMealPrepBooking}
               />
             </div>
           ) : null}

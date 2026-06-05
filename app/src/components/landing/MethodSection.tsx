@@ -17,7 +17,7 @@ const methods = [
   {
     title: 'Nutrition & Meal Prep Planning & Services',
     subtitle: 'FUEL THE GAINS',
-    body: "Majority of results are seen in the kitchen; the gym is what tones those gains into the physique that you want to achieve. We've got a pretty fire chef, I say we let her cook!",
+    body: 'Majority of results are built in the kitchen; the gym tones those gains into the physique you want to achieve. STRYV offers great nutritional options, simple meal structure, and support that keeps your training fueled.',
   },
 ];
 
@@ -46,7 +46,7 @@ export default function MethodSection() {
           <p className="font-caption text-[10px] tracking-[0.2em] uppercase text-gold/60 mb-4">
             How We Train
           </p>
-          <h2 className="font-hero text-3xl md:text-5xl tracking-[0.04em] text-text leading-[1.1]">
+          <h2 className="font-section text-3xl md:text-5xl tracking-normal text-text leading-[1.02]">
             Train With Intention.
             <br />
             <span className="text-gold">Build With Purpose.</span>

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireApiAdmin } from '@/lib/auth';
 import { createLinearIssueForIncident } from '@/lib/linear';
 import { serviceClient } from '@/lib/supabase';
 import {
@@ -25,6 +26,11 @@ function isAuthorized(req: Request): boolean {
   } catch {
     return false;
   }
+}
+
+function hasIncidentSecret(req: Request): boolean {
+  const secret = process.env.INCIDENT_WEBHOOK_SECRET;
+  return Boolean(secret && req.headers.get('x-incident-secret') === secret);
 }
 
 async function fileLinearAndUpdate(incident: StoredIncident) {
@@ -61,7 +67,12 @@ async function fileLinearAndUpdate(incident: StoredIncident) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  if (!hasIncidentSecret(req)) {
+    const admin = await requireApiAdmin();
+    if (admin instanceof NextResponse) return admin;
+  }
+
   try {
     const sb = serviceClient();
     const [incidents, updates] = await Promise.all([
@@ -112,8 +123,8 @@ export async function POST(req: Request) {
       linear: {
         would_file: true,
         priority: linearPriorityForSeverity(payload.severity),
-        assignee_env: 'LINEAR_DEFAULT_ASSIGNEE_ID',
-        team: 'Solvys',
+        assignee_env: 'SSFITNESS_LINEAR_DEFAULT_ASSIGNEE_ID',
+        team: 'SSFitness',
       },
     });
   }
