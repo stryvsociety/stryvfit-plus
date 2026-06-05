@@ -57,39 +57,37 @@ function addMonths(date: Date, months: number): Date {
   return next;
 }
 
+function bookableStartDate(): Date {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  today.setDate(today.getDate() + 1);
+  return today;
+}
+
+function isBeforeBookableStart(date: Date): boolean {
+  return date < bookableStartDate();
+}
+
+function firstBookableDate(days: Date[]): Date {
+  return days.find((date) => !isBeforeBookableStart(date)) ?? days[0];
+}
+
 function buildDateCycle(cycleIndex: number): { days: Date[]; label: string; eyebrow: string } {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  if (cycleIndex === 0) {
-    const days = Array.from({ length: 10 }, (_, index) => {
-      const date = new Date(today);
-      date.setDate(today.getDate() + index + 1);
-      return date;
-    });
-    const start = days[0];
-    const end = days[days.length - 1];
-    return {
-      days,
-      label: `${new Intl.DateTimeFormat('en-US', { month: 'long' }).format(start)} ${start.getDate()}-${end.getDate()}`,
-      eyebrow: 'Next 10 days',
-    };
-  }
-
-  const monthOffset = Math.ceil(cycleIndex / 2);
-  const slide = (cycleIndex - 1) % 2;
-  const monthStart = addMonths(new Date(today.getFullYear(), today.getMonth(), 1), monthOffset);
-  const startDay = slide === 0 ? 1 : 11;
-  const days = Array.from({ length: 10 }, (_, index) => {
+  const monthStart = addMonths(new Date(today.getFullYear(), today.getMonth(), 1), cycleIndex);
+  const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+  const days = Array.from({ length: daysInMonth }, (_, index) => {
     const date = new Date(monthStart);
-    date.setDate(startDay + index);
+    date.setDate(index + 1);
     return date;
   });
 
   return {
     days,
-    label: `${new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(monthStart)} ${startDay}-${startDay + 9}`,
-    eyebrow: `Window ${slide + 1} of 2`,
+    label: new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(monthStart),
+    eyebrow: cycleIndex === 0 ? 'Current month' : 'Full month',
   };
 }
 
@@ -142,7 +140,7 @@ export function GoogleScheduler({
   const [cycleIndex, setCycleIndex] = useState(0);
   const cycle = useMemo(() => buildDateCycle(cycleIndex), [cycleIndex]);
   const days = cycle.days;
-  const [selectedDate, setSelectedDate] = useState(days[0]);
+  const [selectedDate, setSelectedDate] = useState(() => firstBookableDate(days));
   const times = useMemo(() => buildAvailableTimes(availability, selectedDuration), [availability, selectedDuration]);
   const [selectedTime, setSelectedTime] = useState(times[0]);
   const [mockBooked, setMockBooked] = useState(false);
@@ -273,7 +271,7 @@ export function GoogleScheduler({
     const safeCycle = Math.max(0, nextCycle);
     const next = buildDateCycle(safeCycle);
     setCycleIndex(safeCycle);
-    setSelectedDate(next.days[0]);
+    setSelectedDate(firstBookableDate(next.days));
   };
 
   const eventUrl = useMemo(() => {
@@ -412,19 +410,29 @@ export function GoogleScheduler({
               </div>
             </div>
             <div className="overflow-x-auto pb-2">
-              <div className="grid min-w-[860px] grid-cols-10 gap-2">
+              <div
+                className="grid gap-2"
+                style={{
+                  gridTemplateColumns: `repeat(${days.length}, minmax(74px, 1fr))`,
+                  minWidth: `${days.length * 86}px`,
+                }}
+              >
                 {days.map((date, index) => {
                   const isSelected = date.toDateString() === selectedDate.toDateString();
+                  const isPast = !manageAvailability && isBeforeBookableStart(date);
                   const label = formatDay(date);
                   return (
                     <button
                       key={date.toISOString()}
                       type="button"
                       onClick={() => setSelectedDate(date)}
+                      disabled={isPast}
                       className={`relative min-h-[116px] overflow-hidden rounded-md border p-3 text-left transition-all duration-300 ${
                         isSelected
                           ? 'border-[#f24f09] bg-[radial-gradient(circle_at_50%_18%,rgba(242,79,9,0.24),rgba(255,255,255,0)_58%),#fffaf6] text-[#f24f09] shadow-[0_0_0_1px_rgba(242,79,9,0.28),0_0_26px_rgba(242,79,9,0.34),inset_0_1px_0_rgba(255,255,255,0.82)]'
-                          : 'border-[#dedbd4] bg-white text-[#151515] shadow-[0_8px_22px_rgba(21,21,21,0.04)] hover:border-[#f24f09]/60 hover:text-[#f24f09] hover:shadow-[0_0_0_1px_rgba(242,79,9,0.12),0_0_18px_rgba(242,79,9,0.16)]'
+                          : isPast
+                            ? 'border-[#dedbd4] bg-[#eeeae4] text-[#aaa39a] opacity-45'
+                            : 'border-[#dedbd4] bg-white text-[#151515] shadow-[0_8px_22px_rgba(21,21,21,0.04)] hover:border-[#f24f09]/60 hover:text-[#f24f09] hover:shadow-[0_0_0_1px_rgba(242,79,9,0.12),0_0_18px_rgba(242,79,9,0.16)]'
                       }`}
                     >
                       {isSelected ? (
@@ -572,19 +580,23 @@ export function GoogleScheduler({
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-7 gap-2">
           {days.map((date) => {
             const isSelected = date.toDateString() === selectedDate.toDateString();
+            const isPast = !manageAvailability && isBeforeBookableStart(date);
             const label = formatDay(date);
             return (
               <button
                 key={date.toISOString()}
                 type="button"
                 onClick={() => setSelectedDate(date)}
+                disabled={isPast}
                 className={`relative min-h-[74px] overflow-hidden rounded-md border px-2 py-3 text-left transition-all duration-300 ${
                   isSelected
                     ? 'border-gold bg-[radial-gradient(circle_at_50%_14%,rgba(242,79,9,0.34),rgba(242,79,9,0.10)_48%,rgba(255,255,255,0)_72%)] text-gold shadow-[0_0_0_1px_rgba(242,79,9,0.26),0_0_24px_rgba(242,79,9,0.34),inset_0_1px_0_rgba(255,255,255,0.14)]'
-                    : 'border-border bg-bg/70 text-text shadow-[0_8px_22px_rgba(0,0,0,0.04)] hover:border-gold/50 hover:shadow-[0_0_0_1px_rgba(242,79,9,0.12),0_0_18px_rgba(242,79,9,0.16)]'
+                    : isPast
+                      ? 'border-border bg-bg/40 text-text-dim opacity-45'
+                      : 'border-border bg-bg/70 text-text shadow-[0_8px_22px_rgba(0,0,0,0.04)] hover:border-gold/50 hover:shadow-[0_0_0_1px_rgba(242,79,9,0.12),0_0_18px_rgba(242,79,9,0.16)]'
                 }`}
               >
                 {isSelected ? (

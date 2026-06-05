@@ -16,7 +16,6 @@ type ApiResponse = {
 
 const filters = ['all', 'high protein', 'lean', 'keto', 'vegan', 'performance carbs'] as const;
 const workoutFocuses = ['strength', 'hypertrophy', 'conditioning', 'recovery'] as const;
-const CLIENT_NAME = 'Maya Rivera';
 const AFFILIATE_CODE = process.env.NEXT_PUBLIC_IDEAL_NUTRITION_AFFILIATE_CODE ?? 'STRYVTRAINER';
 
 function money(cents: number): string {
@@ -29,7 +28,13 @@ function affiliateUrl(url: string): string {
   return next.toString();
 }
 
-export function MealPrepPlanner({ admin = false }: { admin?: boolean }) {
+export function MealPrepPlanner({
+  admin = false,
+  clientName = 'StryvFit+ client',
+}: {
+  admin?: boolean;
+  clientName?: string;
+}) {
   const [meals, setMeals] = useState<IdealNutritionMeal[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<(typeof filters)[number]>('all');
@@ -127,7 +132,7 @@ export function MealPrepPlanner({ admin = false }: { admin?: boolean }) {
 
     saveClientRequest({
       kind,
-      clientName: CLIENT_NAME,
+      clientName,
       message: cleanMessage,
       meals: selectedMeals.map((meal) => ({
         id: meal.id,

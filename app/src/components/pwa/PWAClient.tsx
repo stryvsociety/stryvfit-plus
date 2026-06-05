@@ -87,6 +87,7 @@ export function PWAClient() {
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
       const details = rejectionDetails(event.reason);
       if (!details) return;
+      if (isServiceWorkerErrorOptional(event.reason) || isServiceWorkerErrorOptional(details.message)) return;
 
       void reportIncident({
         source: 'client',

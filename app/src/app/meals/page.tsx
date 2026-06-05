@@ -3,7 +3,7 @@ import { MealPrepPlanner } from '@/components/meals/MealPrepPlanner';
 import { requireFirstSessionBooked } from '@/lib/auth';
 
 export default async function MealsPage() {
-  await requireFirstSessionBooked();
+  const appUser = await requireFirstSessionBooked();
   return (
     <AppShell>
       <header className="mb-6">
@@ -12,7 +12,7 @@ export default async function MealsPage() {
           Ideal Nutrition picks for your weekly training rhythm.
         </p>
       </header>
-      <MealPrepPlanner />
+      <MealPrepPlanner clientName={appUser.full_name ?? appUser.email} />
     </AppShell>
   );
 }

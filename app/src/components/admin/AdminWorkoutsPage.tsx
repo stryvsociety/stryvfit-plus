@@ -19,13 +19,17 @@ import { SystemHealthPanel } from '@/components/incidents/SystemHealthPanel';
 import { AdminSectionNav } from '@/components/admin/AdminSectionNav';
 import { AdminSupportChat } from '@/components/admin/AdminSupportChat';
 import { ThemeToggle, usePersistedTheme } from '@/components/ui/ThemeToggle';
+import type { AdminClientSummary } from '@/lib/bookings';
 import type { WgerExercise } from '@/lib/wger';
 
-const clients = [
-  { name: 'Maya Rivera', status: 'Remote', goal: 'Strength rebuild', payment: 'Active', phase: 'Base strength' },
-  { name: 'Devon Clarke', status: 'In person', goal: 'Hypertrophy', payment: 'Due tomorrow', phase: 'Volume block' },
-  { name: 'Jordan Ellis', status: 'Remote', goal: 'Conditioning', payment: 'Past due day 3', phase: 'Engine reset' },
-];
+const emptyClient: AdminClientSummary = {
+  id: 'empty-client',
+  name: 'No clients yet',
+  email: null,
+  status: 'Waiting for signups',
+  goal: 'Client profiles will appear here',
+  payment: 'No billing yet',
+};
 
 const workoutLibrary = [
   { title: 'Lower strength A', level: 'Intermediate', blocks: 'Squat pattern, hinge accessory, carries' },
@@ -54,8 +58,9 @@ const movementBlocks = [
   { name: 'Remote video notes', detail: 'Demo angles, tempo reminder, no-equipment swap', icon: Video },
 ];
 
-export function AdminWorkoutsPage() {
-  const [selectedClient, setSelectedClient] = useState(clients[0].name);
+export function AdminWorkoutsPage({ initialClients = [] }: { initialClients?: AdminClientSummary[] }) {
+  const [selectedClient, setSelectedClient] = useState(initialClients[0]?.name ?? '');
+  const [clientSearch, setClientSearch] = useState('');
   const [draftTitle, setDraftTitle] = useState('Lower strength A');
   const [published, setPublished] = useState(false);
   const [theme, setTheme] = usePersistedTheme('stryvadmin-theme', 'light');
@@ -63,9 +68,22 @@ export function AdminWorkoutsPage() {
   const [exerciseSource, setExerciseSource] = useState('loading');
   const [exerciseLibrary, setExerciseLibrary] = useState<WgerExercise[]>([]);
 
+  const filteredClients = useMemo(() => {
+    const query = clientSearch.trim().toLowerCase();
+    if (!query) return initialClients;
+
+    return initialClients.filter((client) =>
+      [client.name, client.email, client.status, client.goal, client.payment]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [clientSearch, initialClients]);
+
   const selected = useMemo(
-    () => clients.find((client) => client.name === selectedClient) ?? clients[0],
-    [selectedClient]
+    () => initialClients.find((client) => client.name === selectedClient) ?? initialClients[0] ?? emptyClient,
+    [initialClients, selectedClient]
   );
 
   function publishPlan() {
@@ -98,6 +116,17 @@ export function AdminWorkoutsPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (initialClients.length === 0) {
+      if (selectedClient) setSelectedClient('');
+      return;
+    }
+
+    if (!initialClients.some((client) => client.name === selectedClient)) {
+      setSelectedClient(initialClients[0].name);
+    }
+  }, [initialClients, selectedClient]);
 
   return (
     <main className={`min-h-dvh ${isDark ? 'admin-theme-dark bg-[#070e13] text-white' : 'bg-[#f7f7f5] text-[#151515]'}`}>
@@ -134,14 +163,27 @@ export function AdminWorkoutsPage() {
           <aside className="rounded-md border border-[#dedbd4] bg-white p-3">
             <label className="flex min-h-10 items-center gap-2 rounded-md border border-[#dedbd4] px-3">
               <Search className="h-4 w-4 text-[#817b72]" />
-              <input className="min-w-0 flex-1 bg-transparent font-body text-sm outline-none" placeholder="Search clients" />
+              <input
+                value={clientSearch}
+                onChange={(event) => setClientSearch(event.target.value)}
+                disabled={initialClients.length === 0}
+                className="min-w-0 flex-1 bg-transparent font-body text-sm outline-none disabled:cursor-not-allowed"
+                placeholder="Search clients"
+              />
             </label>
             <div className="mt-4 space-y-2">
-              {clients.map((client) => {
+              {filteredClients.length === 0 ? (
+                <div className="rounded-md border border-dashed border-[#dedbd4] bg-[#fbfaf8] p-4">
+                  <p className="font-body text-sm text-[#6d675f]">
+                    {initialClients.length === 0 ? 'No clients yet.' : 'No clients match that search.'}
+                  </p>
+                </div>
+              ) : (
+                filteredClients.map((client) => {
                 const active = selectedClient === client.name;
                 return (
                   <button
-                    key={client.name}
+                    key={`${client.id}:${client.email ?? client.name}`}
                     type="button"
                     onClick={() => setSelectedClient(client.name)}
                     className={`w-full rounded-md border p-3 text-left transition ${
@@ -155,7 +197,8 @@ export function AdminWorkoutsPage() {
                     </span>
                   </button>
                 );
-              })}
+                })
+              )}
             </div>
           </aside>
 
@@ -230,7 +273,7 @@ export function AdminWorkoutsPage() {
               <h2 className="mt-2 font-section text-3xl leading-none">{selected.name}</h2>
               <dl className="mt-4 grid gap-2">
                 {[
-                  ['Phase', selected.phase],
+                  ['Phase', selected.status],
                   ['Goal', selected.goal],
                   ['Billing', selected.payment],
                 ].map(([label, value]) => (
@@ -242,7 +285,7 @@ export function AdminWorkoutsPage() {
               </dl>
             </section>
 
-            <AdminSupportChat clientName={selected.name} />
+            <AdminSupportChat clientName={selected.id === 'empty-client' ? 'StryvAdmin' : selected.name} />
 
             <section className="rounded-md border border-[#dedbd4] bg-white p-4">
               <div className="mb-4 flex items-center gap-2">
@@ -296,7 +339,7 @@ export function AdminWorkoutsPage() {
           <div className="lg:col-span-3">
             <GoogleScheduler
               title={`${draftTitle} for ${selected.name}`}
-              description={`Workout focus: ${selected.goal}. Phase: ${selected.phase}.`}
+              description={`Workout focus: ${selected.goal}. Phase: ${selected.status}.`}
               durationMinutes={60}
               variant="timeline"
               manageAvailability

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { BOOKING_CONSENT_FORM_URL } from '../src/lib/bookingConsent';
 import { buildAvailableTimes, parseBookingAvailability } from '../src/lib/bookingAvailability';
-import { buildBookingMetadata } from '../src/lib/bookings';
+import { buildBookingMetadata, manualClerkUserId, normalizeAdminClientInput } from '../src/lib/bookings';
 
 describe('booking utilities', () => {
   test('records consent metadata for session bookings', () => {
@@ -41,5 +41,17 @@ describe('booking utilities', () => {
     });
 
     expect(buildAvailableTimes(availability, 60)).toEqual(['06:30', '07:30', '08:30']);
+  });
+
+  test('normalizes manual admin clients by email', () => {
+    expect(normalizeAdminClientInput({ fullName: ' Nia McCain ', email: ' NIA@EXAMPLE.COM ' })).toEqual({
+      fullName: 'Nia McCain',
+      email: 'nia@example.com',
+      existingClient: true,
+    });
+  });
+
+  test('marks placeholder Clerk IDs as manual clients', () => {
+    expect(manualClerkUserId('existing-client')).toBe('manual:existing-client');
   });
 });

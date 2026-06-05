@@ -2,7 +2,12 @@ import Stripe from 'stripe';
 import { buildAvailableTimes } from '@/lib/bookingAvailability';
 import { getBookingAvailability, slotPartsInBookingTz } from '@/lib/bookingAvailabilityStore';
 import { BOOKING_CONSENT_FORM_URL, bookingRequiresConsent } from '@/lib/bookingConsent';
-import { BOOKING_SERVICES, getStripePriceId, type BookingServiceType } from '@/lib/bookingServices';
+import {
+  BOOKING_SERVICES,
+  getStripePriceId,
+  parseBookingService,
+  type BookingServiceType,
+} from '@/lib/bookingServices';
 import { captureServerIncident } from '@/lib/serverIncidents';
 import {
   calendarEventExists,
@@ -50,6 +55,16 @@ export type AdminBookingSummary = {
   googleEventId: string | null;
 };
 
+export type AdminClientSummary = {
+  id: string;
+  name: string;
+  email: string | null;
+  status: string;
+  goal: string;
+  payment: string;
+  manual?: boolean;
+};
+
 type CreateBookingInput = {
   appUserId: string;
   clerkUserId: string;
@@ -63,8 +78,34 @@ type CreateBookingInput = {
   durationMinutes: number;
 };
 
+export type UpdateBookingInput = {
+  clientName?: string | null;
+  clientEmail?: string | null;
+  serviceType?: unknown;
+  status?: unknown;
+  startsAt?: string;
+  durationMinutes?: number;
+};
+
+export type CreateAdminClientInput = {
+  fullName?: unknown;
+  email?: unknown;
+  existingClient?: unknown;
+};
+
 const BOOKING_SELECT =
   'id, app_user_id, clerk_user_id, service_type, status, starts_at, ends_at, duration_minutes, client_email, client_name, stripe_checkout_session_id, google_event_id';
+
+const BOOKING_STATUSES: BookingStatus[] = [
+  'held',
+  'pending_payment',
+  'confirmed',
+  'cancelled',
+  'rescheduled',
+  'completed',
+  'no_show',
+  'expired',
+];
 
 function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
   return aStart < bEnd && bStart < aEnd;
@@ -234,6 +275,67 @@ function toAdminBookingSummary(row: BookingRow): AdminBookingSummary {
   };
 }
 
+type AppUserRow = {
+  id: string;
+  clerk_user_id: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  subscription_status: string | null;
+};
+
+function prettyStatus(value: string | null): string | null {
+  if (!value) return null;
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function toAdminClientSummary(row: AppUserRow): AdminClientSummary {
+  const subscriptionStatus = prettyStatus(row.subscription_status);
+  const name = row.full_name?.trim() || row.email;
+  const manual = row.clerk_user_id.startsWith('manual:');
+
+  return {
+    id: row.id,
+    name,
+    email: row.email,
+    status: manual ? 'Existing client' : subscriptionStatus ? `Subscription ${subscriptionStatus}` : 'Client account',
+    goal: row.stripe_subscription_id ? 'Subscription client' : 'Client profile',
+    payment: subscriptionStatus
+      ? `Subscription ${subscriptionStatus}`
+      : row.stripe_customer_id
+        ? 'Billing on file'
+        : 'No billing yet',
+    manual,
+  };
+}
+
+export function manualClerkUserId(seed = crypto.randomUUID()): string {
+  return `manual:${seed}`;
+}
+
+export function normalizeAdminClientInput(input: CreateAdminClientInput): {
+  fullName: string;
+  email: string;
+  existingClient: boolean;
+} {
+  const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Enter a valid client email.');
+  }
+
+  const fullName = typeof input.fullName === 'string' ? input.fullName.trim() : '';
+
+  return {
+    email,
+    fullName: fullName || email,
+    existingClient: input.existingClient !== false,
+  };
+}
+
 async function reportBookingIncident(input: {
   route: string;
   message: string;
@@ -305,6 +407,110 @@ function bookingSortValue(booking: AdminBookingSummary): number {
   return Number.MAX_SAFE_INTEGER - startsAt;
 }
 
+export async function listAdminClients(limit = 80): Promise<AdminClientSummary[]> {
+  const { data, error } = await serviceClient()
+    .from('app_users')
+    .select(
+      'id, clerk_user_id, email, full_name, role, stripe_customer_id, stripe_subscription_id, subscription_status'
+    )
+    .eq('role', 'client')
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return ((data ?? []) as AppUserRow[]).map(toAdminClientSummary);
+}
+
+async function ensureExistingClientAccessBooking(row: AppUserRow): Promise<boolean> {
+  const sb = serviceClient();
+  const existing = await sb
+    .from('bookings')
+    .select('id')
+    .eq('app_user_id', row.id)
+    .eq('service_type', 'free')
+    .in('status', ['held', 'pending_payment', 'confirmed', 'rescheduled', 'completed'])
+    .limit(1);
+
+  if (existing.error) throw existing.error;
+  if ((existing.data?.length ?? 0) > 0) return false;
+
+  const startsAt = new Date();
+  const endsAt = new Date(startsAt.getTime() + 60 * 60_000);
+  const inserted = await sb.from('bookings').insert({
+    app_user_id: row.id,
+    clerk_user_id: null,
+    service_type: 'free',
+    status: 'completed',
+    starts_at: startsAt.toISOString(),
+    ends_at: endsAt.toISOString(),
+    duration_minutes: 60,
+    timezone: process.env.BOOKING_TIMEZONE ?? 'America/New_York',
+    client_email: row.email,
+    client_name: row.full_name,
+    metadata: { source: 'stryvadmin-manual-client', existingClient: true },
+  });
+
+  if (inserted.error) throw inserted.error;
+  return true;
+}
+
+export async function createAdminClient(input: CreateAdminClientInput): Promise<{
+  client: AdminClientSummary;
+  accessBookingCreated: boolean;
+  created: boolean;
+}> {
+  const normalized = normalizeAdminClientInput(input);
+  const sb = serviceClient();
+  const existing = await sb
+    .from('app_users')
+    .select('id, clerk_user_id, email, full_name, role, stripe_customer_id, stripe_subscription_id, subscription_status')
+    .eq('email', normalized.email)
+    .maybeSingle();
+
+  if (existing.error) throw existing.error;
+
+  let row: AppUserRow;
+  let created = false;
+  if (existing.data) {
+    if (existing.data.role !== 'client') {
+      throw new Error('That email already belongs to a staff account.');
+    }
+
+    const updated = await sb
+      .from('app_users')
+      .update({ full_name: normalized.fullName, updated_at: new Date().toISOString() })
+      .eq('id', existing.data.id)
+      .select('id, clerk_user_id, email, full_name, role, stripe_customer_id, stripe_subscription_id, subscription_status')
+      .single();
+    if (updated.error) throw updated.error;
+    row = updated.data as AppUserRow;
+  } else {
+    const inserted = await sb
+      .from('app_users')
+      .insert({
+        clerk_user_id: manualClerkUserId(),
+        email: normalized.email,
+        full_name: normalized.fullName,
+        role: 'client',
+      })
+      .select('id, clerk_user_id, email, full_name, role, stripe_customer_id, stripe_subscription_id, subscription_status')
+      .single();
+    if (inserted.error) throw inserted.error;
+    row = inserted.data as AppUserRow;
+    created = true;
+  }
+
+  const accessBookingCreated = normalized.existingClient
+    ? await ensureExistingClientAccessBooking(row)
+    : false;
+
+  return {
+    client: toAdminClientSummary(row),
+    accessBookingCreated,
+    created,
+  };
+}
+
 export async function listAdminBookings(limit = 30): Promise<AdminBookingSummary[]> {
   await expireStaleHolds();
 
@@ -354,6 +560,65 @@ export async function cancelBooking(bookingId: string): Promise<{
     booking: toAdminBookingSummary({ ...row, status: 'cancelled' }),
     calendarDeleted,
     calendarWarning,
+  };
+}
+
+function normalizeEditableStatus(value: unknown, fallback: BookingStatus): BookingStatus {
+  return BOOKING_STATUSES.includes(value as BookingStatus) ? (value as BookingStatus) : fallback;
+}
+
+function normalizeEditableDuration(value: unknown, fallback: number): number {
+  const duration = Number(value);
+  return [30, 45, 60, 90, 120].includes(duration) ? duration : fallback;
+}
+
+export async function updateBooking(
+  bookingId: string,
+  input: UpdateBookingInput
+): Promise<{ booking: AdminBookingSummary; calendarWarning?: string }> {
+  const { data, error } = await serviceClient()
+    .from('bookings')
+    .select(BOOKING_SELECT)
+    .eq('id', bookingId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error('Booking not found');
+
+  const row = data as BookingRow;
+  const durationMinutes = normalizeEditableDuration(input.durationMinutes, row.duration_minutes);
+  const startsAt = input.startsAt ? normalizeBookingDate(input.startsAt) : new Date(row.starts_at);
+  if (!startsAt || Number.isNaN(startsAt.getTime())) {
+    throw new Error('Appointment date is invalid');
+  }
+
+  const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
+  const updates = {
+    client_name: input.clientName === undefined ? row.client_name : input.clientName?.trim() || null,
+    client_email:
+      input.clientEmail === undefined ? row.client_email : input.clientEmail?.trim().toLowerCase() || null,
+    service_type: input.serviceType === undefined ? row.service_type : parseBookingService(input.serviceType),
+    status: normalizeEditableStatus(input.status, row.status),
+    starts_at: startsAt.toISOString(),
+    ends_at: endsAt.toISOString(),
+    duration_minutes: durationMinutes,
+    updated_at: new Date().toISOString(),
+  };
+
+  const updated = await serviceClient()
+    .from('bookings')
+    .update(updates)
+    .eq('id', bookingId)
+    .select(BOOKING_SELECT)
+    .single();
+
+  if (updated.error) throw updated.error;
+
+  return {
+    booking: toAdminBookingSummary(updated.data as BookingRow),
+    calendarWarning: row.google_event_id
+      ? 'Update the matching Google Calendar event if the date or time changed.'
+      : undefined,
   };
 }
 

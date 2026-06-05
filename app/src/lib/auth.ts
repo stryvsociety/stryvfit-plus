@@ -79,6 +79,40 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
   const fullName = user.fullName ?? user.firstName ?? email;
 
   const sb = serviceClient();
+  const existing = await sb
+    .from('app_users')
+    .select('id, clerk_user_id')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (existing.error) throw existing.error;
+
+  if (existing.data) {
+    if (existing.data.clerk_user_id !== user.id) {
+      await sb
+        .from('bookings')
+        .update({ clerk_user_id: null, updated_at: new Date().toISOString() })
+        .eq('app_user_id', existing.data.id)
+        .eq('clerk_user_id', existing.data.clerk_user_id);
+    }
+
+    const { data, error } = await sb
+      .from('app_users')
+      .update({
+        clerk_user_id: user.id,
+        email,
+        full_name: fullName,
+        role,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.data.id)
+      .select('id, clerk_user_id, email, full_name, role, stripe_customer_id')
+      .single();
+
+    if (error) throw error;
+    return data as AppUser;
+  }
+
   const { data, error } = await sb
     .from('app_users')
     .upsert(
