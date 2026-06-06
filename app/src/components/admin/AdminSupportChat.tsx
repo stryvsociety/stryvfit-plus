@@ -11,7 +11,7 @@ import {
 type SubmitState =
   | { kind: 'idle' }
   | { kind: 'sending' }
-  | { kind: 'filed'; issueUrl?: string; issueIdentifier?: string }
+  | { kind: 'filed'; issueUrl?: string; issueIdentifier?: string; attachedPdfName?: string }
   | { kind: 'saved-linear-failed'; reason: string }
   | { kind: 'failed'; reason: string };
 
@@ -71,6 +71,7 @@ export function AdminSupportChat({ clientName }: { clientName: string }) {
     event.preventDefault();
     const cleanMessage = message.trim();
     if (!cleanMessage && !file) return;
+    const attachedPdfName = file?.name;
 
     setStatus({ kind: 'sending' });
     const route = `${window.location.pathname}${window.location.search}`;
@@ -113,7 +114,7 @@ export function AdminSupportChat({ clientName }: { clientName: string }) {
         return;
       }
 
-      setStatus({ kind: 'filed', issueUrl, issueIdentifier });
+      setStatus({ kind: 'filed', issueUrl, issueIdentifier, attachedPdfName });
     } catch (error) {
       setStatus({
         kind: 'failed',
@@ -138,12 +139,12 @@ export function AdminSupportChat({ clientName }: { clientName: string }) {
             if (status.kind !== 'sending') setStatus({ kind: 'idle' });
           }}
           className="min-h-24 w-full resize-none rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-3 font-body text-sm leading-relaxed text-[#151515] outline-none transition focus:border-[#f24f09]"
-          placeholder="Tell Solvys what broke, or upload a PDF below."
+          placeholder="Tell Solvys what broke, or attach a PDF to the ticket below."
         />
         <label className="block rounded-md border border-dashed border-[#dedbd4] bg-[#fbfaf8] p-3 transition focus-within:border-[#f24f09]">
           <span className="flex items-center gap-2 font-caption text-[9px] uppercase tracking-[0.14em] text-[#817b72]">
             <FileText className="h-4 w-4 text-[#f24f09]" strokeWidth={1.7} />
-            Upload PDF
+            Attach PDF to ticket
           </span>
           <input
             key={fileInputKey}
@@ -206,6 +207,12 @@ export function AdminSupportChat({ clientName }: { clientName: string }) {
               </>
             ) : null}
             .
+            {status.attachedPdfName ? (
+              <>
+                {' '}
+                PDF attached: <span className="font-semibold">{status.attachedPdfName}</span>.
+              </>
+            ) : null}
           </p>
         ) : null}
         {status.kind === 'saved-linear-failed' ? (
