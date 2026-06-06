@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { BOOKING_CONSENT_FORM_URL } from '../src/lib/bookingConsent';
 import { buildAvailableTimes, parseBookingAvailability } from '../src/lib/bookingAvailability';
-import { buildBookingMetadata, manualClerkUserId, normalizeAdminClientInput } from '../src/lib/bookings';
+import {
+  buildBookingMetadata,
+  manualClerkUserId,
+  normalizeAdminClientInput,
+  normalizeClientPhoneInput,
+} from '../src/lib/bookings';
 
 describe('booking utilities', () => {
   test('records consent metadata for session bookings', () => {
@@ -47,8 +52,16 @@ describe('booking utilities', () => {
     expect(normalizeAdminClientInput({ fullName: ' Nia McCain ', email: ' NIA@EXAMPLE.COM ' })).toEqual({
       fullName: 'Nia McCain',
       email: 'nia@example.com',
+      phone: null,
       existingClient: true,
     });
+  });
+
+  test('normalizes client mobile numbers for admin and booking flows', () => {
+    expect(normalizeClientPhoneInput('(305) 555-0198')).toBe('+13055550198');
+    expect(normalizeAdminClientInput({ email: 'nia@example.com', phone: '+1 305 555 0198' }).phone).toBe(
+      '+13055550198'
+    );
   });
 
   test('marks placeholder Clerk IDs as manual clients', () => {

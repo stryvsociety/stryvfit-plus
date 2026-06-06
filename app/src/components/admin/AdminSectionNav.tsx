@@ -27,10 +27,10 @@ const sections = [
 
 export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: AdminSectionNavProps) {
   return (
-    <div className="-mx-1 overflow-x-auto px-1 pb-1">
+    <div className="-mx-1 px-1 pb-1">
       <nav
         aria-label="StryvAdmin sections"
-        className="grid min-h-14 min-w-[580px] grid-cols-5 gap-1 rounded-md border border-[#dedbd4] bg-white p-1 shadow-sm sm:min-w-[680px] lg:min-w-full"
+        className="grid min-h-14 grid-cols-3 gap-1 rounded-md border border-[#dedbd4] bg-white p-1 shadow-sm sm:grid-cols-5"
       >
         {sections.map((section) => {
           const Icon = section.icon;
@@ -62,7 +62,7 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
               </motion.span>
             </>
           );
-          const className = `relative inline-flex min-h-12 min-w-0 items-center justify-center rounded-md bg-transparent px-3 font-caption text-[10px] uppercase tracking-[0.14em] transition-colors ${
+          const className = `relative inline-flex min-h-12 min-w-0 items-center justify-center rounded-md bg-transparent px-2 font-caption text-[9px] uppercase tracking-[0.12em] transition-colors sm:px-3 sm:text-[10px] sm:tracking-[0.14em] ${
             isActive ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#f24f09]'
           }`;
 

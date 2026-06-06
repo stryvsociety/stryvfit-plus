@@ -38,6 +38,7 @@ export type BookingRow = {
   duration_minutes: number;
   client_email: string | null;
   client_name: string | null;
+  client_phone: string | null;
   stripe_checkout_session_id: string | null;
   google_event_id: string | null;
 };
@@ -52,6 +53,7 @@ export type AdminBookingSummary = {
   durationMinutes: number;
   clientName: string | null;
   clientEmail: string | null;
+  clientPhone: string | null;
   googleEventId: string | null;
 };
 
@@ -59,6 +61,7 @@ export type AdminClientSummary = {
   id: string;
   name: string;
   email: string | null;
+  phone: string | null;
   status: string;
   goal: string;
   payment: string;
@@ -70,6 +73,7 @@ type CreateBookingInput = {
   clerkUserId: string;
   clientEmail: string;
   clientName: string | null;
+  clientPhone?: string | null;
   serviceType: BookingServiceType;
   consentAcknowledged?: boolean;
   consentFormUrl?: string;
@@ -81,6 +85,7 @@ type CreateBookingInput = {
 export type UpdateBookingInput = {
   clientName?: string | null;
   clientEmail?: string | null;
+  clientPhone?: string | null;
   serviceType?: unknown;
   status?: unknown;
   startsAt?: string;
@@ -90,11 +95,14 @@ export type UpdateBookingInput = {
 export type CreateAdminClientInput = {
   fullName?: unknown;
   email?: unknown;
+  phone?: unknown;
   existingClient?: unknown;
 };
 
 const BOOKING_SELECT =
-  'id, app_user_id, clerk_user_id, service_type, status, starts_at, ends_at, duration_minutes, client_email, client_name, stripe_checkout_session_id, google_event_id';
+  'id, app_user_id, clerk_user_id, service_type, status, starts_at, ends_at, duration_minutes, client_email, client_name, client_phone, stripe_checkout_session_id, google_event_id';
+const APP_USER_SELECT =
+  'id, clerk_user_id, email, full_name, phone, role, stripe_customer_id, stripe_subscription_id, subscription_status';
 
 const BOOKING_STATUSES: BookingStatus[] = [
   'held',
@@ -246,6 +254,7 @@ export async function createBookingHold(input: CreateBookingInput): Promise<Book
       timezone: process.env.BOOKING_TIMEZONE ?? 'America/New_York',
       client_email: input.clientEmail,
       client_name: input.clientName,
+      client_phone: normalizeClientPhoneInput(input.clientPhone),
       hold_expires_at: status === 'pending_payment' ? expiresAt : null,
       metadata: buildBookingMetadata({
         serviceType: input.serviceType,
@@ -271,6 +280,7 @@ function toAdminBookingSummary(row: BookingRow): AdminBookingSummary {
     durationMinutes: row.duration_minutes,
     clientName: row.client_name,
     clientEmail: row.client_email,
+    clientPhone: row.client_phone,
     googleEventId: row.google_event_id,
   };
 }
@@ -280,6 +290,7 @@ type AppUserRow = {
   clerk_user_id: string;
   email: string;
   full_name: string | null;
+  phone: string | null;
   role: string;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
@@ -302,6 +313,7 @@ function toAdminClientSummary(row: AppUserRow): AdminClientSummary {
     id: row.id,
     name,
     email: row.email,
+    phone: row.phone,
     status: manual ? 'Existing client' : subscriptionStatus ? `Subscription ${subscriptionStatus}` : 'Client account',
     goal: row.stripe_subscription_id ? 'Subscription client' : 'Client profile',
     payment: subscriptionStatus
@@ -317,9 +329,29 @@ export function manualClerkUserId(seed = crypto.randomUUID()): string {
   return `manual:${seed}`;
 }
 
+export function normalizeClientPhoneInput(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const digits = trimmed.replace(/\D/g, '');
+  if (trimmed.startsWith('+') && digits.length >= 10 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+  if (digits.length === 10) {
+    return `+1${digits}`;
+  }
+  if (digits.length >= 11 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+
+  throw new Error('Enter a valid mobile number.');
+}
+
 export function normalizeAdminClientInput(input: CreateAdminClientInput): {
   fullName: string;
   email: string;
+  phone: string | null;
   existingClient: boolean;
 } {
   const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
@@ -332,6 +364,7 @@ export function normalizeAdminClientInput(input: CreateAdminClientInput): {
   return {
     email,
     fullName: fullName || email,
+    phone: normalizeClientPhoneInput(input.phone),
     existingClient: input.existingClient !== false,
   };
 }
@@ -410,9 +443,7 @@ function bookingSortValue(booking: AdminBookingSummary): number {
 export async function listAdminClients(limit = 80): Promise<AdminClientSummary[]> {
   const { data, error } = await serviceClient()
     .from('app_users')
-    .select(
-      'id, clerk_user_id, email, full_name, role, stripe_customer_id, stripe_subscription_id, subscription_status'
-    )
+    .select(APP_USER_SELECT)
     .eq('role', 'client')
     .order('updated_at', { ascending: false })
     .limit(limit);
@@ -447,6 +478,7 @@ async function ensureExistingClientAccessBooking(row: AppUserRow): Promise<boole
     timezone: process.env.BOOKING_TIMEZONE ?? 'America/New_York',
     client_email: row.email,
     client_name: row.full_name,
+    client_phone: row.phone,
     metadata: { source: 'stryvadmin-manual-client', existingClient: true },
   });
 
@@ -463,7 +495,7 @@ export async function createAdminClient(input: CreateAdminClientInput): Promise<
   const sb = serviceClient();
   const existing = await sb
     .from('app_users')
-    .select('id, clerk_user_id, email, full_name, role, stripe_customer_id, stripe_subscription_id, subscription_status')
+    .select(APP_USER_SELECT)
     .eq('email', normalized.email)
     .maybeSingle();
 
@@ -478,9 +510,9 @@ export async function createAdminClient(input: CreateAdminClientInput): Promise<
 
     const updated = await sb
       .from('app_users')
-      .update({ full_name: normalized.fullName, updated_at: new Date().toISOString() })
+      .update({ full_name: normalized.fullName, phone: normalized.phone, updated_at: new Date().toISOString() })
       .eq('id', existing.data.id)
-      .select('id, clerk_user_id, email, full_name, role, stripe_customer_id, stripe_subscription_id, subscription_status')
+      .select(APP_USER_SELECT)
       .single();
     if (updated.error) throw updated.error;
     row = updated.data as AppUserRow;
@@ -491,9 +523,10 @@ export async function createAdminClient(input: CreateAdminClientInput): Promise<
         clerk_user_id: manualClerkUserId(),
         email: normalized.email,
         full_name: normalized.fullName,
+        phone: normalized.phone,
         role: 'client',
       })
-      .select('id, clerk_user_id, email, full_name, role, stripe_customer_id, stripe_subscription_id, subscription_status')
+      .select(APP_USER_SELECT)
       .single();
     if (inserted.error) throw inserted.error;
     row = inserted.data as AppUserRow;
@@ -509,6 +542,25 @@ export async function createAdminClient(input: CreateAdminClientInput): Promise<
     accessBookingCreated,
     created,
   };
+}
+
+export async function deleteAdminClient(clientId: string): Promise<{ clientId: string }> {
+  const { data, error } = await serviceClient()
+    .from('app_users')
+    .select('id, clerk_user_id, role')
+    .eq('id', clientId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error('Client not found');
+  if (data.role !== 'client' || !String(data.clerk_user_id).startsWith('manual:')) {
+    throw new Error('Only manually added clients can be removed from StryvAdmin.');
+  }
+
+  const removed = await serviceClient().from('app_users').delete().eq('id', clientId);
+  if (removed.error) throw removed.error;
+
+  return { clientId };
 }
 
 export async function listAdminBookings(limit = 30): Promise<AdminBookingSummary[]> {
@@ -597,6 +649,8 @@ export async function updateBooking(
     client_name: input.clientName === undefined ? row.client_name : input.clientName?.trim() || null,
     client_email:
       input.clientEmail === undefined ? row.client_email : input.clientEmail?.trim().toLowerCase() || null,
+    client_phone:
+      input.clientPhone === undefined ? row.client_phone : normalizeClientPhoneInput(input.clientPhone),
     service_type: input.serviceType === undefined ? row.service_type : parseBookingService(input.serviceType),
     status: normalizeEditableStatus(input.status, row.status),
     starts_at: startsAt.toISOString(),

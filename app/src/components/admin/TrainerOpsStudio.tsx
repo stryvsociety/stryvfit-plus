@@ -12,6 +12,7 @@ import {
   Flame,
   Inbox,
   Pencil,
+  Phone,
   Plus,
   Save,
   Search,
@@ -39,6 +40,7 @@ type AdminTab = 'appointments' | 'meals' | 'clients';
 type BookingEditPayload = {
   clientName: string;
   clientEmail: string;
+  clientPhone: string;
   serviceType: AdminBookingSummary['serviceType'];
   status: BookingStatus;
   startsAt: string;
@@ -48,12 +50,14 @@ type BookingEditPayload = {
 type ClientDraft = {
   fullName: string;
   email: string;
+  phone: string;
 };
 
 const emptyClient: AdminClientSummary = {
   id: 'empty-client',
   name: 'No clients yet',
   email: null,
+  phone: null,
   status: 'Waiting for signups',
   goal: 'Client profiles will appear here',
   payment: 'No billing yet',
@@ -95,6 +99,7 @@ function clientSummaryFromBooking(booking: AdminBookingSummary): AdminClientSumm
     id: `booking:${booking.id}`,
     name: clientNameFromBooking(booking),
     email: booking.clientEmail,
+    phone: booking.clientPhone,
     status: booking.serviceType === 'free' ? 'First session booked' : 'Booked',
     goal: booking.serviceLabel,
     payment: booking.status === 'pending_payment' ? 'Payment pending' : 'Active',
@@ -153,13 +158,19 @@ export function TrainerOpsStudio({
   const [clientSearch, setClientSearch] = useState('');
   const [clientsOpen, setClientsOpen] = useState(false);
   const [createdClients, setCreatedClients] = useState<AdminClientSummary[]>([]);
-  const [clientDraft, setClientDraft] = useState<ClientDraft>({ fullName: '', email: '' });
+  const [deletedClientIds, setDeletedClientIds] = useState<string[]>([]);
+  const [clientDraft, setClientDraft] = useState<ClientDraft>({ fullName: '', email: '', phone: '' });
   const [addingClient, setAddingClient] = useState(false);
+  const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
   const [clientNotice, setClientNotice] = useState<string | null>(null);
   const isDark = theme === 'dark';
   const baseClients = useMemo(
-    () => upsertClientSummary(initialClients, ...createdClients),
-    [createdClients, initialClients]
+    () =>
+      upsertClientSummary(
+        initialClients.filter((client) => !deletedClientIds.includes(client.id)),
+        ...createdClients.filter((client) => !deletedClientIds.includes(client.id))
+      ),
+    [createdClients, deletedClientIds, initialClients]
   );
   const clients = useMemo(() => buildClientRoster(bookings, baseClients), [baseClients, bookings]);
   const [selectedClient, setSelectedClient] = useState(
@@ -170,7 +181,7 @@ export function TrainerOpsStudio({
     if (!query) return clients;
 
     return clients.filter((client) =>
-      [client.name, client.email, client.status, client.goal, client.payment]
+      [client.name, client.email, client.phone, client.status, client.goal, client.payment]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -257,7 +268,7 @@ export function TrainerOpsStudio({
 
       setCreatedClients((current) => upsertClientSummary(current, payload.client as AdminClientSummary));
       setSelectedClient(payload.client.name);
-      setClientDraft({ fullName: '', email: '' });
+      setClientDraft({ fullName: '', email: '', phone: '' });
       setClientSearch('');
       setClientsOpen(false);
       setClientNotice('Client added. They can sign in with this email.');
@@ -265,6 +276,30 @@ export function TrainerOpsStudio({
       setClientNotice(error instanceof Error ? error.message : 'Unable to add client');
     } finally {
       setAddingClient(false);
+    }
+  }
+
+  async function removeClientById(client: AdminClientSummary) {
+    if (!client.manual || deletingClientId) return;
+
+    setDeletingClientId(client.id);
+    setClientNotice(null);
+    try {
+      const response = await fetch('/api/admin/clients', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: client.id }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? 'Unable to remove client');
+
+      setDeletedClientIds((current) => (current.includes(client.id) ? current : [...current, client.id]));
+      setCreatedClients((current) => current.filter((item) => item.id !== client.id));
+      setClientNotice(`${client.name} removed from the client list.`);
+    } catch (error) {
+      setClientNotice(error instanceof Error ? error.message : 'Unable to remove client');
+    } finally {
+      setDeletingClientId(null);
     }
   }
 
@@ -379,28 +414,51 @@ export function TrainerOpsStudio({
                   filteredClients.map((client) => {
                     const active = selectedClient === client.name;
                     return (
-                      <button
+                      <article
                         key={`${client.id}:${client.email ?? client.name}`}
-                        type="button"
-                        onClick={() => {
-                          setSelectedClient(client.name);
-                          setClientsOpen(false);
-                        }}
-                        className={`w-full rounded-md border p-3 text-left transition ${
+                        className={`rounded-md border p-3 transition ${
                           active
                             ? 'border-[#f24f09] bg-[#fff3ec]'
                             : 'border-[#e6e2da] bg-[#fbfaf8] hover:border-[#f24f09]/50'
                         }`}
                       >
-                        <span className="block font-headline text-base uppercase">{client.name}</span>
-                        <span className="mt-1 block font-body text-xs text-[#6d675f]">{client.goal}</span>
-                        {client.email ? (
-                          <span className="mt-1 block font-body text-[11px] text-[#817b72]">{client.email}</span>
-                        ) : null}
-                        <span className="mt-3 inline-flex rounded-sm bg-[#151515] px-2 py-1 font-caption text-[8px] uppercase tracking-[0.12em] text-white">
-                          {client.status}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedClient(client.name);
+                            setClientsOpen(false);
+                          }}
+                          className="w-full text-left"
+                        >
+                          <span className="block font-headline text-base uppercase">{client.name}</span>
+                          <span className="mt-1 block font-body text-xs text-[#6d675f]">{client.goal}</span>
+                          {client.email ? (
+                            <span className="mt-1 block font-body text-[11px] text-[#817b72]">{client.email}</span>
+                          ) : null}
+                          {client.phone ? (
+                            <span className="mt-1 inline-flex items-center gap-1 font-body text-[11px] text-[#817b72]">
+                              <Phone className="h-3 w-3" strokeWidth={1.7} />
+                              {client.phone}
+                            </span>
+                          ) : null}
+                        </button>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                          <span className="inline-flex rounded-sm bg-[#151515] px-2 py-1 font-caption text-[8px] uppercase tracking-[0.12em] text-white">
+                            {client.status}
+                          </span>
+                          {client.manual ? (
+                            <button
+                              type="button"
+                              onClick={() => void removeClientById(client)}
+                              disabled={deletingClientId === client.id}
+                              className="inline-flex min-h-8 items-center gap-1 rounded-full border border-[#dedbd4] bg-white px-3 font-caption text-[8px] uppercase tracking-[0.12em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                              {deletingClientId === client.id ? 'Removing' : 'Delete'}
+                            </button>
+                          ) : null}
+                        </div>
+                      </article>
                     );
                   })
                 )}
@@ -411,6 +469,14 @@ export function TrainerOpsStudio({
                 <p className="mt-1 font-headline text-lg uppercase leading-none">{selected.name}</p>
                 <p className="mt-2 font-body text-xs text-[#6d675f]">{selected.goal}</p>
                 {selected.email ? <p className="mt-1 font-body text-[11px] text-[#817b72]">{selected.email}</p> : null}
+                {selected.phone ? (
+                  <p className="mt-1 inline-flex items-center gap-1 font-body text-[11px] text-[#817b72]">
+                    <Phone className="h-3 w-3" strokeWidth={1.7} />
+                    {selected.phone}
+                  </p>
+                ) : (
+                  <p className="mt-1 font-body text-[11px] text-[#817b72]">Mobile not set</p>
+                )}
               </div>
             )}
             <form onSubmit={addClient} className="mt-4 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
@@ -436,6 +502,16 @@ export function TrainerOpsStudio({
                   required
                   className="min-h-10 w-full rounded-md border border-[#dedbd4] bg-white px-3 font-body text-sm outline-none focus:border-[#f24f09]"
                   placeholder="Client email"
+                />
+              </label>
+              <label className="mt-2 block">
+                <span className="sr-only">Client mobile number</span>
+                <input
+                  value={clientDraft.phone}
+                  onChange={(event) => setClientDraft((draft) => ({ ...draft, phone: event.target.value }))}
+                  inputMode="tel"
+                  className="min-h-10 w-full rounded-md border border-[#dedbd4] bg-white px-3 font-body text-sm outline-none focus:border-[#f24f09]"
+                  placeholder="Mobile number"
                 />
               </label>
               <button
@@ -476,6 +552,7 @@ export function TrainerOpsStudio({
                   ['Session', selected.status],
                   ['Goal', selected.goal],
                   ['Billing', selected.payment],
+                  ['Mobile', selected.phone ?? 'Not set'],
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-center justify-between rounded-md bg-[#f5f2ed] px-3 py-2">
                     <dt className="font-caption text-[9px] uppercase tracking-[0.12em] text-[#817b72]">{label}</dt>
@@ -484,7 +561,6 @@ export function TrainerOpsStudio({
                 ))}
               </dl>
             </section>
-            <AdminSupportChat clientName={selected.name} />
           </aside>
 
           {tab === 'appointments' ? (
@@ -499,10 +575,11 @@ export function TrainerOpsStudio({
             </div>
           ) : null}
 
-          <div className="lg:col-span-3">
+          <div className="grid gap-4 lg:col-span-3 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="rounded-md border border-[#dedbd4] bg-white p-2">
               <SystemHealthPanel compact />
             </div>
+            <AdminSupportChat clientName={selected.name} />
           </div>
         </section>
       </div>
@@ -729,6 +806,7 @@ function bookingStatusLabel(booking: AdminBookingSummary): string {
 type BookingEditDraft = {
   clientName: string;
   clientEmail: string;
+  clientPhone: string;
   serviceType: AdminBookingSummary['serviceType'];
   status: BookingStatus;
   date: string;
@@ -764,6 +842,7 @@ function editDraftFromBooking(booking: AdminBookingSummary): BookingEditDraft {
   return {
     clientName: booking.clientName ?? '',
     clientEmail: booking.clientEmail ?? '',
+    clientPhone: booking.clientPhone ?? '',
     serviceType: booking.serviceType,
     status: booking.status,
     date: dateInputValue(booking.startsAt),
@@ -815,6 +894,7 @@ function AppointmentsPanel({
       await onUpdateBooking(bookingId, {
         clientName: draft.clientName,
         clientEmail: draft.clientEmail,
+        clientPhone: draft.clientPhone,
         serviceType: draft.serviceType,
         status: draft.status,
         startsAt: startsAtFromDraft(draft),
@@ -902,6 +982,12 @@ function AppointmentsPanel({
                       {booking.clientEmail ? (
                         <p className="mt-1 font-body text-[11px] text-[#817b72]">{booking.clientEmail}</p>
                       ) : null}
+                      {booking.clientPhone ? (
+                        <p className="mt-1 inline-flex items-center gap-1 font-body text-[11px] text-[#817b72]">
+                          <Phone className="h-3 w-3" strokeWidth={1.7} />
+                          {booking.clientPhone}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                       <span className="ios-pill inline-flex min-h-10 items-center justify-center rounded-full bg-[#151515] px-4 text-center font-caption text-[9px] uppercase tracking-[0.13em] text-white">
@@ -944,6 +1030,15 @@ function AppointmentsPanel({
                         <input
                           value={draft.clientEmail}
                           onChange={(event) => updateDraft(booking.id, { clientEmail: event.target.value })}
+                          className="mt-2 min-h-11 w-full rounded-md border border-[#dedbd4] px-3 font-body text-sm outline-none focus:border-[#f24f09]"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Client mobile</span>
+                        <input
+                          value={draft.clientPhone}
+                          onChange={(event) => updateDraft(booking.id, { clientPhone: event.target.value })}
+                          inputMode="tel"
                           className="mt-2 min-h-11 w-full rounded-md border border-[#dedbd4] px-3 font-body text-sm outline-none focus:border-[#f24f09]"
                         />
                       </label>

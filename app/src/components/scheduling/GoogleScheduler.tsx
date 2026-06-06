@@ -42,6 +42,7 @@ export type SchedulerBookingDraft = {
   startsAt: string;
   endsAt: string;
   durationMinutes: number;
+  clientPhone?: string;
   title: string;
   description: string;
   consentAcknowledged?: boolean;
@@ -49,6 +50,24 @@ export type SchedulerBookingDraft = {
 
 function normalizeDuration(durationMinutes: number): number {
   return durationOptions.includes(durationMinutes) ? durationMinutes : durationOptions[0];
+}
+
+function normalizeMobileNumber(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const digits = trimmed.replace(/\D/g, '');
+  if (trimmed.startsWith('+') && digits.length >= 10 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+  if (digits.length === 10) {
+    return `+1${digits}`;
+  }
+  if (digits.length >= 11 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+
+  return null;
 }
 
 function addMonths(date: Date, months: number): Date {
@@ -146,12 +165,15 @@ export function GoogleScheduler({
   const [mockBooked, setMockBooked] = useState(false);
   const [bookingPending, setBookingPending] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const [clientPhone, setClientPhone] = useState('');
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [remoteSlots, setRemoteSlots] = useState<RemoteSlot[] | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const selectedDateKey = formatCalendarDateKey(selectedDate);
   const bookingCtaLabel = serviceType === 'free' ? 'Claim Free Session' : 'Book Session';
   const requiresConsent = bookingRequiresConsent(serviceType);
+  const requiresMobile = Boolean(onBookSession && !manageAvailability);
+  const normalizedClientPhone = normalizeMobileNumber(clientPhone);
   const blockedTimes = useMemo(
     () => availability.blockedSlots[selectedDateKey] ?? [],
     [availability.blockedSlots, selectedDateKey]
@@ -167,6 +189,8 @@ export function GoogleScheduler({
         : bookingCtaLabel;
   const bookingButtonSubtext = mockBooked
     ? 'Confirmation started'
+    : requiresMobile && !normalizedClientPhone
+      ? 'Mobile required'
     : requiresConsent && !consentAcknowledged
       ? 'Consent required'
       : serviceType === 'free'
@@ -300,6 +324,10 @@ export function GoogleScheduler({
 
   async function bookSelectedSession() {
     if (!onBookSession || bookingPending) return;
+    if (requiresMobile && !normalizedClientPhone) {
+      setBookingError('Enter a mobile number before booking.');
+      return;
+    }
     if (requiresConsent && !consentAcknowledged) {
       setBookingError('Open the consent form and acknowledge it before booking.');
       return;
@@ -319,6 +347,7 @@ export function GoogleScheduler({
         startsAt: start.toISOString(),
         endsAt: end.toISOString(),
         durationMinutes: selectedDuration,
+        clientPhone: normalizedClientPhone ?? undefined,
         title,
         description: [description, context].filter(Boolean).join('\n\n'),
         consentAcknowledged: requiresConsent ? consentAcknowledged : undefined,
@@ -683,10 +712,38 @@ export function GoogleScheduler({
       ) : null}
 
       {onBookSession ? (
+        <section className="rounded-sm border border-gold/20 bg-surface-2/80 p-4">
+          <label className="block">
+            <span className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">
+              Mobile number
+            </span>
+            <input
+              value={clientPhone}
+              onChange={(event) => {
+                setClientPhone(event.target.value);
+                if (bookingError?.toLowerCase().includes('mobile')) {
+                  setBookingError(null);
+                }
+              }}
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="(555) 123-4567"
+              className="mt-2 min-h-11 w-full rounded-sm border border-border bg-bg/70 px-3 font-body text-sm text-text outline-none placeholder:text-text-dim focus:border-gold"
+            />
+          </label>
+        </section>
+      ) : null}
+
+      {onBookSession ? (
         <button
           type="button"
           onClick={bookSelectedSession}
-          disabled={bookingPending || slotsLoading || (requiresConsent && !consentAcknowledged)}
+          disabled={
+            bookingPending ||
+            slotsLoading ||
+            (requiresConsent && !consentAcknowledged) ||
+            (requiresMobile && !normalizedClientPhone)
+          }
           className="ios-pill mt-5 inline-flex min-h-14 w-full flex-col items-center justify-center rounded-full bg-gold px-4 text-bg transition-colors hover:bg-gold-deep disabled:cursor-not-allowed disabled:opacity-55"
         >
           <span className="font-control text-sm font-semibold uppercase tracking-[0.08em]">

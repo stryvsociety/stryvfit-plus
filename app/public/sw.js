@@ -1,9 +1,10 @@
-const CACHE_VERSION = 'v24';
+const CACHE_VERSION = 'v25';
 const STATIC_CACHE = `stryvfit-static-${CACHE_VERSION}`;
 const PAGE_CACHE = `stryvfit-pages-${CACHE_VERSION}`;
 const CORE_ROUTES = ['/', '/book', '/notes', '/meals', '/coach', '/admin/pulse'];
 const APP_SHELL = [
   '/manifest.webmanifest',
+  '/admin-manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/stryv-insignia.svg',
@@ -63,6 +64,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/images/') ||
     url.pathname.startsWith('/fonts/') ||
     url.pathname === '/manifest.webmanifest' ||
+    url.pathname === '/admin-manifest.webmanifest' ||
     url.pathname === '/stryv-insignia.svg' ||
     url.pathname === '/stryv-logo.svg' ||
     url.pathname === '/stryv-logo-typography.svg'

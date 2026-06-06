@@ -26,6 +26,7 @@ const emptyClient: AdminClientSummary = {
   id: 'empty-client',
   name: 'No clients yet',
   email: null,
+  phone: null,
   status: 'Waiting for signups',
   goal: 'Client profiles will appear here',
   payment: 'No billing yet',
@@ -73,7 +74,7 @@ export function AdminWorkoutsPage({ initialClients = [] }: { initialClients?: Ad
     if (!query) return initialClients;
 
     return initialClients.filter((client) =>
-      [client.name, client.email, client.status, client.goal, client.payment]
+      [client.name, client.email, client.phone, client.status, client.goal, client.payment]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()

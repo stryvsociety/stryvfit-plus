@@ -1,0 +1,41 @@
+{
+  "name": "StryvAdmin",
+  "short_name": "StryvAdmin",
+  "description": "Manage Stryv Society Fitness clients, appointments, meals, and support.",
+  "id": "/admin/pulse",
+  "start_url": "/admin/pulse",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "background_color": "#070E13",
+  "theme_color": "#070E13",
+  "orientation": "portrait",
+  "categories": ["fitness", "health", "business"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Appointments",
+      "short_name": "Appointments",
+      "description": "Open StryvAdmin appointments.",
+      "url": "/admin/pulse",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Meals",
+      "short_name": "Meals",
+      "description": "Open StryvAdmin meal planning.",
+      "url": "/admin/pulse?tab=meals",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Clients",
+      "short_name": "Clients",
+      "description": "Open StryvAdmin clients.",
+      "url": "/admin/pulse?tab=clients",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

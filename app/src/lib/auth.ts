@@ -12,6 +12,7 @@ export type AppUser = {
   clerk_user_id: string;
   email: string;
   full_name: string | null;
+  phone: string | null;
   role: AppRole;
   stripe_customer_id: string | null;
 };
@@ -77,6 +78,7 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
     roleFromMetadata(user.publicMetadata as Record<string, unknown> | undefined);
   const role: AppRole = metadataRole ?? (configuredAdminEmails().includes(email) ? 'admin' : 'client');
   const fullName = user.fullName ?? user.firstName ?? email;
+  const phone = user.primaryPhoneNumber?.phoneNumber ?? null;
 
   const sb = serviceClient();
   const existing = await sb
@@ -102,11 +104,12 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
         clerk_user_id: user.id,
         email,
         full_name: fullName,
+        phone,
         role,
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.data.id)
-      .select('id, clerk_user_id, email, full_name, role, stripe_customer_id')
+      .select('id, clerk_user_id, email, full_name, phone, role, stripe_customer_id')
       .single();
 
     if (error) throw error;
@@ -120,12 +123,13 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
         clerk_user_id: user.id,
         email,
         full_name: fullName,
+        phone,
         role,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'clerk_user_id' }
     )
-    .select('id, clerk_user_id, email, full_name, role, stripe_customer_id')
+    .select('id, clerk_user_id, email, full_name, phone, role, stripe_customer_id')
     .single();
 
   if (error) throw error;

@@ -20,6 +20,7 @@ type CheckoutBody = {
   startsAt?: unknown;
   endsAt?: unknown;
   durationMinutes?: unknown;
+  clientPhone?: unknown;
   consentAcknowledged?: unknown;
 };
 
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
     clerkUserId: appUser.clerk_user_id,
     clientEmail: appUser.email,
     clientName: appUser.full_name,
+    clientPhone: typeof body?.clientPhone === 'string' ? body.clientPhone : appUser.phone,
     serviceType,
     consentAcknowledged: requiresConsent ? true : undefined,
     consentFormUrl: requiresConsent ? BOOKING_CONSENT_FORM_URL : undefined,
