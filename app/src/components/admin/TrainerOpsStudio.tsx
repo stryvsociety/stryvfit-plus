@@ -141,6 +141,10 @@ function upsertClientSummary(clients: AdminClientSummary[], ...nextClients: Admi
   return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function isStoredClientProfile(client: AdminClientSummary): boolean {
+  return client.id !== emptyClient.id && !client.id.startsWith('booking:');
+}
+
 export function TrainerOpsStudio({
   initialBookings = [],
   initialClients = [],
@@ -210,8 +214,8 @@ export function TrainerOpsStudio({
       setBookings((current) => current.filter((booking) => booking.id !== bookingId));
       setCancelNotice(
         payload?.calendarWarning
-          ? `Appointment deleted locally. ${payload.calendarWarning}`
-          : 'Appointment deleted. Client profile kept.'
+          ? `Appointment canceled locally. ${payload.calendarWarning}`
+          : 'Appointment canceled. Client profile kept.'
       );
     } catch (error) {
       setCancelNotice(error instanceof Error ? error.message : 'Unable to cancel booking');
@@ -280,7 +284,7 @@ export function TrainerOpsStudio({
   }
 
   async function removeClientById(client: AdminClientSummary) {
-    if (!client.manual || deletingClientId) return;
+    if (!isStoredClientProfile(client) || deletingClientId) return;
 
     setDeletingClientId(client.id);
     setClientNotice(null);
@@ -295,7 +299,7 @@ export function TrainerOpsStudio({
 
       setDeletedClientIds((current) => (current.includes(client.id) ? current : [...current, client.id]));
       setCreatedClients((current) => current.filter((item) => item.id !== client.id));
-      setClientNotice(`${client.name} removed from the client list.`);
+      setClientNotice(`${client.name} profile removed. Existing appointments stay on the calendar.`);
     } catch (error) {
       setClientNotice(error instanceof Error ? error.message : 'Unable to remove client');
     } finally {
@@ -446,15 +450,16 @@ export function TrainerOpsStudio({
                           <span className="inline-flex rounded-sm bg-[#151515] px-2 py-1 font-caption text-[8px] uppercase tracking-[0.12em] text-white">
                             {client.status}
                           </span>
-                          {client.manual ? (
+                          {isStoredClientProfile(client) ? (
                             <button
                               type="button"
                               onClick={() => void removeClientById(client)}
                               disabled={deletingClientId === client.id}
                               className="inline-flex min-h-8 items-center gap-1 rounded-full border border-[#dedbd4] bg-white px-3 font-caption text-[8px] uppercase tracking-[0.12em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
+                              aria-label={`Delete profile for ${client.name}`}
                             >
                               <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                              {deletingClientId === client.id ? 'Removing' : 'Delete'}
+                              {deletingClientId === client.id ? 'Removing' : 'Delete profile'}
                             </button>
                           ) : null}
                         </div>
@@ -477,6 +482,18 @@ export function TrainerOpsStudio({
                 ) : (
                   <p className="mt-1 font-body text-[11px] text-[#817b72]">Mobile not set</p>
                 )}
+                {isStoredClientProfile(selected) ? (
+                  <button
+                    type="button"
+                    onClick={() => void removeClientById(selected)}
+                    disabled={deletingClientId === selected.id}
+                    className="ios-pill mt-3 inline-flex min-h-9 items-center gap-2 rounded-full border border-[#dedbd4] bg-white px-3 font-caption text-[8px] uppercase tracking-[0.12em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={`Delete profile for ${selected.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    {deletingClientId === selected.id ? 'Removing' : 'Delete profile'}
+                  </button>
+                ) : null}
               </div>
             )}
             <form onSubmit={addClient} className="mt-4 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
@@ -1007,10 +1024,10 @@ function AppointmentsPanel({
                         onClick={() => void onCancelBooking(booking.id)}
                         disabled={busy}
                         className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label={`Delete appointment for ${clientNameFromBooking(booking)}`}
+                        aria-label={`Cancel appointment for ${clientNameFromBooking(booking)}`}
                       >
                         <Trash2 className="h-4 w-4" strokeWidth={1.7} />
-                        Delete
+                        Cancel
                       </button>
                     </div>
                   </div>

@@ -553,8 +553,8 @@ export async function deleteAdminClient(clientId: string): Promise<{ clientId: s
 
   if (error) throw error;
   if (!data) throw new Error('Client not found');
-  if (data.role !== 'client' || !String(data.clerk_user_id).startsWith('manual:')) {
-    throw new Error('Only manually added clients can be removed from StryvAdmin.');
+  if (data.role !== 'client') {
+    throw new Error('Only client profiles can be removed from StryvAdmin.');
   }
 
   const removed = await serviceClient().from('app_users').delete().eq('id', clientId);

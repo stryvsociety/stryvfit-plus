@@ -13,6 +13,7 @@ const OPTIONAL_SERVICE_WORKER_ERRORS = [
   /securityerror/i,
   /only secure origins/i,
 ];
+const CLERK_ASSET_URL_PATTERN = /(https?:\/\/[^\s)]+\/__clerk\/npm\/[^\s)]+)/i;
 
 function eventLoadMessage(event: Event): string | null {
   const target = event.target;
@@ -56,6 +57,38 @@ function isServiceWorkerErrorOptional(error: unknown): boolean {
   return OPTIONAL_SERVICE_WORKER_ERRORS.some((pattern) => pattern.test(message));
 }
 
+function clerkAssetUrlFromMessage(message: string): URL | null {
+  const match = message.match(CLERK_ASSET_URL_PATTERN);
+  if (!match?.[1]) return null;
+
+  try {
+    return new URL(match[1].replace(/[.)\]]+$/g, ''));
+  } catch {
+    return null;
+  }
+}
+
+function isClerkChunkOrAssetError(message: string): boolean {
+  if (!clerkAssetUrlFromMessage(message)) return false;
+  return /loading chunk \d+ failed/i.test(message) || /script .*\/__clerk\/npm\/.* load failed/i.test(message);
+}
+
+async function clerkAssetIsReachable(url: URL): Promise<boolean> {
+  try {
+    const head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    if (head.ok) return true;
+  } catch {
+    // Fall through to GET because some proxied assets do not support HEAD consistently.
+  }
+
+  try {
+    const get = await fetch(url, { method: 'GET', cache: 'no-store' });
+    return get.ok;
+  } catch {
+    return false;
+  }
+}
+
 function canRegisterServiceWorker(): boolean {
   return (
     'serviceWorker' in navigator &&
@@ -71,14 +104,46 @@ export function PWAClient() {
   const [updateReady, setUpdateReady] = useState(false);
 
   useEffect(() => {
+    async function reportClerkAssetErrorIfStillBroken(input: {
+      message: string;
+      stack?: string;
+      context: Record<string, unknown>;
+    }) {
+      const assetUrl = clerkAssetUrlFromMessage(input.message);
+      if (assetUrl && (await clerkAssetIsReachable(assetUrl))) return;
+
+      void reportIncident({
+        source: 'client',
+        severity: 'medium',
+        message: input.message,
+        stack: input.stack,
+        context: {
+          ...input.context,
+          clerkAssetUrl: assetUrl?.href,
+          clerkAssetReachable: false,
+        },
+        admin_action: 'Auto-filed from Clerk asset verification after a chunk load failure.',
+      });
+    }
+
     const onError = (event: ErrorEvent) => {
       const loadMessage = eventLoadMessage(event);
       if (loadMessage && isServiceWorkerErrorOptional(loadMessage)) return;
+      const message = loadMessage || event.message || 'Unhandled browser error';
+
+      if (isClerkChunkOrAssetError(message)) {
+        void reportClerkAssetErrorIfStillBroken({
+          message,
+          stack: event.error?.stack,
+          context: { filename: event.filename, lineno: event.lineno, colno: event.colno, eventType: event.type },
+        });
+        return;
+      }
 
       void reportIncident({
         source: 'client',
         severity: loadMessage ? 'medium' : 'high',
-        message: loadMessage || event.message || 'Unhandled browser error',
+        message,
         stack: event.error?.stack,
         context: { filename: event.filename, lineno: event.lineno, colno: event.colno, eventType: event.type },
         admin_action: 'Auto-filed from global error listener.',
@@ -88,6 +153,15 @@ export function PWAClient() {
       const details = rejectionDetails(event.reason);
       if (!details) return;
       if (isServiceWorkerErrorOptional(event.reason) || isServiceWorkerErrorOptional(details.message)) return;
+
+      if (isClerkChunkOrAssetError(details.message)) {
+        void reportClerkAssetErrorIfStillBroken({
+          message: details.message,
+          stack: details.stack,
+          context: { reason: details.reason },
+        });
+        return;
+      }
 
       void reportIncident({
         source: 'client',
