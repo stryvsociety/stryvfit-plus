@@ -143,16 +143,27 @@ export async function requireAppUser(): Promise<AppUser> {
 }
 
 export async function hasBookedFreeFirstSession(appUser: AppUser): Promise<boolean> {
+  const activeBookingStatuses = ['held', 'pending_payment', 'confirmed', 'rescheduled', 'completed'];
   const { data, error } = await serviceClient()
     .from('bookings')
     .select('id')
     .eq('app_user_id', appUser.id)
     .eq('service_type', 'free')
-    .in('status', ['held', 'pending_payment', 'confirmed', 'rescheduled', 'completed'])
+    .in('status', activeBookingStatuses)
     .limit(1);
 
   if (error) throw error;
-  return (data?.length ?? 0) > 0;
+  if ((data?.length ?? 0) > 0) return true;
+
+  const existingClientBooking = await serviceClient()
+    .from('bookings')
+    .select('id')
+    .eq('client_email', appUser.email)
+    .in('status', activeBookingStatuses)
+    .limit(1);
+
+  if (existingClientBooking.error) throw existingClientBooking.error;
+  return (existingClientBooking.data?.length ?? 0) > 0;
 }
 
 export async function requireFirstSessionBooked(): Promise<AppUser> {

@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { buildAvailableTimes } from '@/lib/bookingAvailability';
+import { buildAvailableTimesForDate } from '@/lib/bookingAvailability';
 import { getBookingAvailability, slotPartsInBookingTz } from '@/lib/bookingAvailabilityStore';
 import { BOOKING_CONSENT_FORM_URL, bookingRequiresConsent } from '@/lib/bookingConsent';
 import {
@@ -173,7 +173,7 @@ async function assertTrainerSlotAllowed(
 
   const availability = await getBookingAvailability();
   const { dateKey, time } = slotPartsInBookingTz(startsAt);
-  const allowedStarts = buildAvailableTimes(availability, durationMinutes);
+  const allowedStarts = buildAvailableTimesForDate(availability, durationMinutes, dateKey);
   if (!allowedStarts.includes(time)) {
     return { ok: false, reason: 'That time is outside trainer availability.' };
   }

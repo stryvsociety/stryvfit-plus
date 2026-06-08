@@ -19,7 +19,7 @@ import type { BookingServiceType } from '@/lib/bookingServices';
 import { reportIncident } from '@/lib/reportIncident';
 import { BOOKING_CONSENT_FORM_URL, bookingRequiresConsent } from '@/lib/bookingConsent';
 import {
-  buildAvailableTimes,
+  buildAvailableTimesForDate,
   combineBookingTzDateAndTime,
   DEFAULT_BOOKING_AVAILABILITY,
   formatCalendarDateKey,
@@ -160,7 +160,11 @@ export function GoogleScheduler({
   const cycle = useMemo(() => buildDateCycle(cycleIndex), [cycleIndex]);
   const days = cycle.days;
   const [selectedDate, setSelectedDate] = useState(() => firstBookableDate(days));
-  const times = useMemo(() => buildAvailableTimes(availability, selectedDuration), [availability, selectedDuration]);
+  const selectedDateKey = formatCalendarDateKey(selectedDate);
+  const times = useMemo(
+    () => buildAvailableTimesForDate(availability, selectedDuration, selectedDateKey),
+    [availability, selectedDateKey, selectedDuration]
+  );
   const [selectedTime, setSelectedTime] = useState(times[0]);
   const [mockBooked, setMockBooked] = useState(false);
   const [bookingPending, setBookingPending] = useState(false);
@@ -169,7 +173,6 @@ export function GoogleScheduler({
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [remoteSlots, setRemoteSlots] = useState<RemoteSlot[] | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const selectedDateKey = formatCalendarDateKey(selectedDate);
   const bookingCtaLabel = serviceType === 'free' ? 'Claim Free Session' : 'Book Session';
   const requiresConsent = bookingRequiresConsent(serviceType);
   const requiresMobile = Boolean(onBookSession && !manageAvailability);
@@ -792,9 +795,12 @@ function BookingAvailabilityControls({
 }) {
   const [startTimeDraft, setStartTimeDraft] = useState(availability.startTimes[0] ?? availability.firstStart);
   const selectedKey = formatCalendarDateKey(selectedDate);
+  const selectedDayKey = String(selectedDate.getDay());
   const blockedSlots = availability.blockedSlots[selectedKey] ?? [];
-  const generatedTimes = buildAvailableTimes(availability, durationMinutes);
+  const generatedTimes = buildAvailableTimesForDate(availability, durationMinutes, selectedKey);
   const exactStarts = availability.startTimes ?? [];
+  const weeklyStarts = availability.weeklyStartTimes?.[selectedDayKey] ?? [];
+  const repeatDayLabel = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(selectedDate);
 
   function addExactStart() {
     const next = normalizeStartTimes([...exactStarts, startTimeDraft]);
@@ -804,6 +810,26 @@ function BookingAvailabilityControls({
 
   function removeExactStart(time: string) {
     onChange({ startTimes: exactStarts.filter((start) => start !== time) });
+  }
+
+  function addWeeklyStart() {
+    const nextForDay = normalizeStartTimes([...weeklyStarts, startTimeDraft]);
+    if (nextForDay.length === weeklyStarts.length) return;
+    onChange({
+      weeklyStartTimes: {
+        ...(availability.weeklyStartTimes ?? {}),
+        [selectedDayKey]: nextForDay,
+      },
+    });
+  }
+
+  function removeWeeklyStart(time: string) {
+    onChange({
+      weeklyStartTimes: {
+        ...(availability.weeklyStartTimes ?? {}),
+        [selectedDayKey]: weeklyStarts.filter((start) => start !== time),
+      },
+    });
   }
 
   return (
@@ -825,7 +851,7 @@ function BookingAvailabilityControls({
           </p>
         </div>
         <div className="rounded-full border border-[#dedbd4] bg-white px-3 py-2 font-caption text-[9px] uppercase tracking-[0.12em] text-[#817b72]">
-          {generatedTimes.length} starts · {exactStarts.length > 0 ? 'Exact' : 'Generated'}
+          {generatedTimes.length} starts · {weeklyStarts.length > 0 ? 'Weekly' : exactStarts.length > 0 ? 'Exact' : 'Generated'}
         </div>
       </div>
 
@@ -889,6 +915,13 @@ function BookingAvailabilityControls({
             >
               <Plus className="h-4 w-4" strokeWidth={1.8} />
             </button>
+            <button
+              type="button"
+              onClick={addWeeklyStart}
+              className="ios-pill inline-flex min-h-11 items-center justify-center rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[9px] uppercase tracking-[0.12em] text-[#151515]"
+            >
+              Repeat {repeatDayLabel}
+            </button>
           </div>
         </div>
 
@@ -909,6 +942,31 @@ function BookingAvailabilityControls({
                   onClick={() => removeExactStart(time)}
                   className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#817b72] transition hover:bg-white hover:text-[#151515]"
                   aria-label={`Remove ${formatTime(time)}`}
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+                </button>
+              </span>
+            ))
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {weeklyStarts.length === 0 ? (
+            <p className="rounded-full border border-[#dedbd4] bg-[#fbfaf8] px-3 py-2 font-body text-xs text-[#66615a]">
+              No repeating {repeatDayLabel} starts yet.
+            </p>
+          ) : (
+            weeklyStarts.map((time) => (
+              <span
+                key={`${selectedDayKey}-${time}`}
+                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#151515]/20 bg-[#f2f0eb] pl-3 pr-1 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-[#151515]"
+              >
+                {repeatDayLabel} {formatTime(time)}
+                <button
+                  type="button"
+                  onClick={() => removeWeeklyStart(time)}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#817b72] transition hover:bg-white hover:text-[#151515]"
+                  aria-label={`Remove repeating ${repeatDayLabel} ${formatTime(time)}`}
                 >
                   <X className="h-3.5 w-3.5" strokeWidth={1.8} />
                 </button>

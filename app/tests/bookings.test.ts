@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { BOOKING_CONSENT_FORM_URL } from '../src/lib/bookingConsent';
-import { buildAvailableTimes, parseBookingAvailability } from '../src/lib/bookingAvailability';
+import { buildAvailableTimes, buildAvailableTimesForDate, parseBookingAvailability } from '../src/lib/bookingAvailability';
 import {
   buildBookingMetadata,
   manualClerkUserId,
@@ -46,6 +46,20 @@ describe('booking utilities', () => {
     });
 
     expect(buildAvailableTimes(availability, 60)).toEqual(['06:30', '07:30', '08:30']);
+  });
+
+  test('uses repeating weekday starts for the selected booking day', () => {
+    const availability = parseBookingAvailability({
+      firstStart: '06:30',
+      lastStart: '08:30',
+      bufferMinutes: 30,
+      startTimes: ['06:30'],
+      weeklyStartTimes: { '5': ['08:30', '07:30'] },
+      blockedSlots: {},
+    });
+
+    expect(buildAvailableTimesForDate(availability, 60, '2026-06-12')).toEqual(['07:30', '08:30']);
+    expect(buildAvailableTimesForDate(availability, 60, '2026-06-13')).toEqual(['06:30']);
   });
 
   test('normalizes manual admin clients by email', () => {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { buildAvailableTimes } from '@/lib/bookingAvailability';
+import { buildAvailableTimesForDate } from '@/lib/bookingAvailability';
 import { combineBookingTzDateAndTime, getBookingAvailability } from '@/lib/bookingAvailabilityStore';
 import { assertSlotAvailable, expireStaleHolds } from '@/lib/bookings';
 import { requireApiUser } from '@/lib/auth';
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   await expireStaleHolds();
   const availability = await getBookingAvailability();
   const times = await Promise.all(
-    buildAvailableTimes(availability, duration).map(async (time) => {
+    buildAvailableTimesForDate(availability, duration, date).map(async (time) => {
       const start = combineBookingTzDateAndTime(date, time);
       const end = new Date(start.getTime() + duration * 60 * 1000);
       const slotCheck = await assertSlotAvailable(start.toISOString(), end.toISOString(), {

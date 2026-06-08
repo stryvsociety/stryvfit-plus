@@ -195,7 +195,7 @@ export function ClientPhaseFlow() {
     const dx = touch.clientX - touchStart.current.x;
     const dy = touch.clientY - touchStart.current.y;
     touchStart.current = null;
-    if ((dx > 72 || dy > 72) && (phase === 'workout' || phase === 'meal-prep')) {
+    if ((dx > 72 || dy > 72) && phase === 'workout') {
       handleAdvance();
     }
   }

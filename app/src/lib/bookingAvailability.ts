@@ -3,6 +3,7 @@ export type BookingAvailability = {
   lastStart: string;
   bufferMinutes: number;
   startTimes: string[];
+  weeklyStartTimes: Record<string, string[]>;
   blockedSlots: Record<string, string[]>;
 };
 
@@ -13,6 +14,7 @@ export const DEFAULT_BOOKING_AVAILABILITY: BookingAvailability = {
   lastStart: '18:00',
   bufferMinutes: 30,
   startTimes: [],
+  weeklyStartTimes: {},
   blockedSlots: {},
 };
 
@@ -36,6 +38,17 @@ export function parseBookingAvailability(value: unknown): BookingAvailability {
   const startTimes = Array.isArray(value.startTimes)
     ? normalizeStartTimes(value.startTimes.filter((time): time is string => typeof time === 'string'))
     : DEFAULT_BOOKING_AVAILABILITY.startTimes;
+  const weeklyStartTimesRaw = value.weeklyStartTimes;
+  const weeklyStartTimes: Record<string, string[]> = {};
+  if (isRecord(weeklyStartTimesRaw)) {
+    for (const [key, times] of Object.entries(weeklyStartTimesRaw)) {
+      if (/^[0-6]$/.test(key) && Array.isArray(times)) {
+        weeklyStartTimes[key] = normalizeStartTimes(
+          times.filter((time): time is string => typeof time === 'string')
+        );
+      }
+    }
+  }
 
   return {
     firstStart:
@@ -46,6 +59,7 @@ export function parseBookingAvailability(value: unknown): BookingAvailability {
         ? value.bufferMinutes
         : DEFAULT_BOOKING_AVAILABILITY.bufferMinutes,
     startTimes,
+    weeklyStartTimes,
     blockedSlots,
   };
 }
@@ -160,4 +174,21 @@ export function buildAvailableTimes(availability: BookingAvailability, durationM
   }
 
   return slots.length > 0 ? slots : [availability.firstStart];
+}
+
+export function dayOfWeekKeyFromDateKey(dateKey: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return '';
+  return String(new Date(`${dateKey}T00:00:00.000Z`).getUTCDay());
+}
+
+export function buildAvailableTimesForDate(
+  availability: BookingAvailability,
+  durationMinutes: number,
+  dateKey: string
+): string[] {
+  const weeklyStartTimes = normalizeStartTimes(
+    availability.weeklyStartTimes?.[dayOfWeekKeyFromDateKey(dateKey)] ?? []
+  );
+  if (weeklyStartTimes.length > 0) return weeklyStartTimes;
+  return buildAvailableTimes(availability, durationMinutes);
 }
