@@ -95,6 +95,18 @@ function clientRosterKey(email: string | null | undefined, name: string): string
 }
 
 function clientSummaryFromBooking(booking: AdminBookingSummary): AdminClientSummary {
+  if (booking.source === 'google_calendar') {
+    return {
+      id: `calendar-client:${booking.id}`,
+      name: clientNameFromBooking(booking),
+      email: booking.clientEmail,
+      phone: booking.clientPhone,
+      status: 'Google Calendar event',
+      goal: booking.serviceLabel,
+      payment: 'Calendar only',
+    };
+  }
+
   return {
     id: `booking:${booking.id}`,
     name: clientNameFromBooking(booking),
@@ -812,6 +824,7 @@ function formatBookingTime(value: string): string {
 }
 
 function bookingStatusLabel(booking: AdminBookingSummary): string {
+  if (booking.source === 'google_calendar') return 'Calendar import';
   if (booking.status === 'pending_payment') return 'Payment pending';
   if (booking.status === 'rescheduled') return 'Rescheduled';
   if (booking.status === 'held') return 'Held';
@@ -887,7 +900,7 @@ function AppointmentsPanel({
   onCancelBooking: (bookingId: string) => Promise<void>;
   onUpdateBooking: (bookingId: string, draft: BookingEditPayload) => Promise<void>;
 }) {
-  const firstFreeSession = bookings.find((booking) => booking.serviceType === 'free');
+  const firstFreeSession = bookings.find((booking) => booking.source !== 'google_calendar' && booking.serviceType === 'free');
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [editDrafts, setEditDrafts] = useState<Record<string, BookingEditDraft>>({});
 
@@ -981,6 +994,7 @@ function AppointmentsPanel({
               const editing = editingBookingId === booking.id;
               const draft = editDrafts[booking.id] ?? editDraftFromBooking(booking);
               const busy = cancelingBookingId === booking.id || updatingBookingId === booking.id;
+              const calendarOnly = booking.source === 'google_calendar';
 
               return (
                 <article key={booking.id} className="rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
@@ -1010,29 +1024,38 @@ function AppointmentsPanel({
                       <span className="ios-pill inline-flex min-h-10 items-center justify-center rounded-full bg-[#151515] px-4 text-center font-caption text-[9px] uppercase tracking-[0.13em] text-white">
                         {bookingStatusLabel(booking)}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => beginEdit(booking)}
-                        disabled={busy}
-                        className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Pencil className="h-4 w-4" strokeWidth={1.7} />
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void onCancelBooking(booking.id)}
-                        disabled={busy}
-                        className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label={`Cancel appointment for ${clientNameFromBooking(booking)}`}
-                      >
-                        <Trash2 className="h-4 w-4" strokeWidth={1.7} />
-                        Cancel
-                      </button>
+                      {calendarOnly ? (
+                        <span className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-[#6d675f]">
+                          <CalendarClock className="h-4 w-4" strokeWidth={1.7} />
+                          Google Calendar
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => beginEdit(booking)}
+                            disabled={busy}
+                            className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Pencil className="h-4 w-4" strokeWidth={1.7} />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void onCancelBooking(booking.id)}
+                            disabled={busy}
+                            className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Cancel appointment for ${clientNameFromBooking(booking)}`}
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={1.7} />
+                            Cancel
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  {editing ? (
+                  {editing && !calendarOnly ? (
                     <div className="mt-4 grid gap-3 rounded-md border border-[#dedbd4] bg-white p-3 md:grid-cols-2">
                       <label className="block">
                         <span className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Client name</span>

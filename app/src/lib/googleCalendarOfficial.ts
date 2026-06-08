@@ -8,6 +8,16 @@ export type GoogleBusyWindow = {
   end: string;
 };
 
+export type GoogleCalendarImportedEvent = {
+  eventId: string;
+  appBookingId: string | null;
+  summary: string;
+  startsAt: string;
+  endsAt: string;
+  attendeeEmail: string | null;
+  attendeeName: string | null;
+};
+
 export type GoogleCalendarDeleteResult =
   | { ok: true; missing?: boolean }
   | { ok: false; reason: string };
@@ -20,6 +30,16 @@ type CalendarEventInput = {
   endsAt: string;
   attendeeEmail?: string | null;
   attendeeName?: string | null;
+};
+
+type GoogleCalendarEventResource = {
+  id?: string;
+  status?: string;
+  summary?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  attendees?: Array<{ email?: string; displayName?: string; self?: boolean; organizer?: boolean }>;
+  extendedProperties?: { private?: Record<string, string | undefined> };
 };
 
 function googleCalendarId(): string {
@@ -73,6 +93,75 @@ async function getGoogleAccessToken(): Promise<string | null> {
 
   const json = (await res.json()) as { access_token?: string };
   return json.access_token ?? null;
+}
+
+function clientFromCalendarEvent(event: GoogleCalendarEventResource): {
+  email: string | null;
+  name: string | null;
+} {
+  const attendee = event.attendees?.find((item) => item.email && !item.self && !item.organizer);
+  return {
+    email: attendee?.email ?? null,
+    name: attendee?.displayName ?? attendee?.email ?? null,
+  };
+}
+
+export async function listUpcomingCalendarEvents(limit = 20): Promise<GoogleCalendarImportedEvent[]> {
+  try {
+    const accessToken = await getGoogleAccessToken();
+    if (!accessToken) return [];
+
+    const calendarId = googleCalendarId();
+    const params = new URLSearchParams({
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      timeMin: new Date().toISOString(),
+      maxResults: String(limit),
+      timeZone: process.env.BOOKING_TIMEZONE ?? 'America/New_York',
+    });
+    const res = await fetch(
+      `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
+      {
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      await reportGoogleCalendarIncident({
+        route: '/admin/pulse',
+        message: `Google Calendar event import failed: ${res.status}`,
+        context: { response: text.slice(0, 500) },
+        adminAction: 'Check Google OAuth refresh token and Calendar API permissions.',
+      });
+      return [];
+    }
+
+    const json = (await res.json()) as { items?: GoogleCalendarEventResource[] };
+    return (json.items ?? [])
+      .filter((event) => event.status !== 'cancelled' && event.id && event.start?.dateTime && event.end?.dateTime)
+      .map((event) => {
+        const client = clientFromCalendarEvent(event);
+        return {
+          eventId: event.id!,
+          appBookingId: event.extendedProperties?.private?.stryvfit_booking_id ?? null,
+          summary: event.summary?.trim() || 'Google Calendar event',
+          startsAt: event.start!.dateTime!,
+          endsAt: event.end!.dateTime!,
+          attendeeEmail: client.email,
+          attendeeName: client.name,
+        };
+      });
+  } catch (error) {
+    await reportGoogleCalendarIncident({
+      route: '/admin/pulse',
+      message: error instanceof Error ? error.message : 'Google Calendar event import failed',
+      adminAction: 'Refresh Google Calendar credentials so external appointments can appear in StryvAdmin.',
+    });
+    return [];
+  }
 }
 
 export async function listBusyWindows(startsAt: string, endsAt: string): Promise<GoogleBusyWindow[]> {

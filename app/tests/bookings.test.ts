@@ -3,6 +3,7 @@ import { BOOKING_CONSENT_FORM_URL } from '../src/lib/bookingConsent';
 import { buildAvailableTimes, buildAvailableTimesForDate, parseBookingAvailability } from '../src/lib/bookingAvailability';
 import {
   buildBookingMetadata,
+  type AdminBookingSummary,
   manualClerkUserId,
   normalizeAdminClientInput,
   normalizeClientPhoneInput,
@@ -80,5 +81,25 @@ describe('booking utilities', () => {
 
   test('marks placeholder Clerk IDs as manual clients', () => {
     expect(manualClerkUserId('existing-client')).toBe('manual:existing-client');
+  });
+
+  test('can represent imported Google Calendar appointments without a local booking id', () => {
+    const booking: AdminBookingSummary = {
+      id: 'calendar:external-event',
+      source: 'google_calendar',
+      serviceType: 'free',
+      serviceLabel: 'Google Calendar event',
+      status: 'confirmed',
+      startsAt: '2026-06-12T13:00:00.000Z',
+      endsAt: '2026-06-12T14:00:00.000Z',
+      durationMinutes: 60,
+      clientName: 'Nia McCain',
+      clientEmail: 'nia@example.com',
+      clientPhone: null,
+      googleEventId: 'external-event',
+    };
+
+    expect(booking.id).toBe('calendar:external-event');
+    expect(booking.source).toBe('google_calendar');
   });
 });

@@ -115,6 +115,8 @@ export function ClientPhaseFlow() {
   const [workoutComplete, setWorkoutComplete] = useState(false);
   const [deliberating, setDeliberating] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [bookingMessage, setBookingMessage] = useState<string | null>(() => {
     if (bookingStatus === 'success') return 'Payment received. We are confirming your calendar event.';
     if (bookingStatus === 'confirmed') return 'You are booked. Your calendar confirmation is on the way.';
@@ -187,6 +189,29 @@ export function ClientPhaseFlow() {
         ? 'You are booked. Your calendar invite is being finalized by the team.'
         : 'You are booked. Your calendar confirmation is on the way.'
     );
+  }
+
+  async function openBillingPortal() {
+    if (billingBusy) return;
+    setBillingBusy(true);
+    setBillingMessage(null);
+    try {
+      const returnPath = `${window.location.pathname}${window.location.search}`;
+      const res = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ returnPath }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !payload.url) {
+        throw new Error(payload.error ?? 'Unable to open billing');
+      }
+      window.location.assign(payload.url);
+    } catch (error) {
+      setBillingMessage(error instanceof Error ? error.message : 'Unable to open billing');
+    } finally {
+      setBillingBusy(false);
+    }
   }
 
   function onTouchEnd(event: TouchEvent<HTMLDivElement>) {
@@ -267,6 +292,9 @@ export function ClientPhaseFlow() {
               bookingLocked={paymentState.bookingLocked}
               serviceType={serviceType}
               bookingMessage={bookingMessage}
+              billingBusy={billingBusy}
+              billingMessage={billingMessage}
+              onOpenBillingPortal={openBillingPortal}
               onPreviewWorkout={() => countdown === 0 && setPhase('workout')}
               onBookSession={createBooking}
             />
@@ -286,7 +314,13 @@ export function ClientPhaseFlow() {
 
       <AnimatePresence>
         {paymentOpen ? (
-          <PaymentModal onClose={() => setPaymentOpen(false)} bookingLocked={paymentState.bookingLocked} />
+          <PaymentModal
+            onClose={() => setPaymentOpen(false)}
+            bookingLocked={paymentState.bookingLocked}
+            billingBusy={billingBusy}
+            billingMessage={billingMessage}
+            onOpenBillingPortal={openBillingPortal}
+          />
         ) : null}
       </AnimatePresence>
     </main>
@@ -299,6 +333,9 @@ function CalendarOnly({
   bookingLocked,
   serviceType,
   bookingMessage,
+  billingBusy,
+  billingMessage,
+  onOpenBillingPortal,
   onPreviewWorkout,
   onBookSession,
 }: {
@@ -307,6 +344,9 @@ function CalendarOnly({
   bookingLocked: boolean;
   serviceType: BookingServiceType;
   bookingMessage: string | null;
+  billingBusy: boolean;
+  billingMessage: string | null;
+  onOpenBillingPortal: () => void;
   onPreviewWorkout: () => void;
   onBookSession: (draft: SchedulerBookingDraft) => Promise<void>;
 }) {
@@ -360,9 +400,37 @@ function CalendarOnly({
             <p className="mx-auto mt-3 max-w-md font-body text-sm leading-relaxed text-text-muted">
               Booking reopens after the subscription balance is current.
             </p>
+            <button
+              type="button"
+              onClick={onOpenBillingPortal}
+              disabled={billingBusy}
+              className="ios-pill mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-gold px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-bg disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <WalletCards className="h-4 w-4" />
+              {billingBusy ? 'Opening' : 'Manage billing'}
+            </button>
+            {billingMessage ? <p className="mt-3 font-body text-xs leading-relaxed text-text-muted">{billingMessage}</p> : null}
           </div>
         ) : (
           <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
+            <div>
+              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Billing</p>
+              <p className="mt-1 font-body text-sm leading-relaxed text-text-muted">
+                Update payment details or manage a recurring plan through Stripe.
+              </p>
+              {billingMessage ? <p className="mt-2 font-body text-xs leading-relaxed text-text-muted">{billingMessage}</p> : null}
+            </div>
+            <button
+              type="button"
+              onClick={onOpenBillingPortal}
+              disabled={billingBusy}
+              className="ios-pill inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-text-muted transition hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <WalletCards className="h-4 w-4" />
+              {billingBusy ? 'Opening' : 'Manage billing'}
+            </button>
+          </div>
           {bookingMessage ? (
             <div className="mb-4 rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
               <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Booking status</p>
@@ -689,7 +757,19 @@ function FloatingMenu({
   );
 }
 
-function PaymentModal({ onClose, bookingLocked }: { onClose: () => void; bookingLocked: boolean }) {
+function PaymentModal({
+  onClose,
+  bookingLocked,
+  billingBusy,
+  billingMessage,
+  onOpenBillingPortal,
+}: {
+  onClose: () => void;
+  bookingLocked: boolean;
+  billingBusy: boolean;
+  billingMessage: string | null;
+  onOpenBillingPortal: () => void;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -708,13 +788,15 @@ function PaymentModal({ onClose, bookingLocked }: { onClose: () => void; booking
         <p className="mt-3 font-body text-sm leading-relaxed text-text-muted">
           We only surface this during the phase change. {bookingLocked ? 'Booking is paused until the balance is current.' : 'Your next phase unlocks once the balance is current.'}
         </p>
+        {billingMessage ? <p className="mt-3 font-body text-xs leading-relaxed text-text-muted">{billingMessage}</p> : null}
         <div className="mt-5 grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => window.location.assign('/book?service=sessions_4')}
-            className="ios-pill min-h-11 rounded-full bg-gold px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-bg"
+            onClick={onOpenBillingPortal}
+            disabled={billingBusy}
+            className="ios-pill min-h-11 rounded-full bg-gold px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-bg disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Pay now
+            {billingBusy ? 'Opening' : 'Manage billing'}
           </button>
           <button
             type="button"

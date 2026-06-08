@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { confirmBookingFromStripe, ensureGoogleEvent, expireBookingForStripeSession } from '@/lib/bookings';
+import { syncStripeSubscriptionBilling } from '@/lib/billing';
 import { serviceClient } from '@/lib/supabase';
 import { stripe } from '@/lib/stripeClient';
 
@@ -51,6 +52,11 @@ export async function POST(req: Request) {
   if (event.type === 'checkout.session.expired') {
     const session = event.data.object as Stripe.Checkout.Session;
     await expireBookingForStripeSession(session.id);
+  }
+
+  if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+    const subscription = event.data.object as Stripe.Subscription;
+    await syncStripeSubscriptionBilling(subscription);
   }
 
   return NextResponse.json({ ok: true });

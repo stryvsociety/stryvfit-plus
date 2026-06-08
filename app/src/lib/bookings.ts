@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { syncStripeSessionBilling } from '@/lib/billing';
 import { buildAvailableTimesForDate } from '@/lib/bookingAvailability';
 import { getBookingAvailability, slotPartsInBookingTz } from '@/lib/bookingAvailabilityStore';
 import { BOOKING_CONSENT_FORM_URL, bookingRequiresConsent } from '@/lib/bookingConsent';
@@ -13,6 +14,8 @@ import {
   calendarEventExists,
   createCalendarEvent,
   deleteCalendarEvent,
+  listUpcomingCalendarEvents,
+  type GoogleCalendarImportedEvent,
   listBusyWindows,
 } from '@/lib/googleCalendarOfficial';
 import { serviceClient } from '@/lib/supabase';
@@ -45,6 +48,7 @@ export type BookingRow = {
 
 export type AdminBookingSummary = {
   id: string;
+  source?: 'app' | 'google_calendar';
   serviceType: BookingServiceType;
   serviceLabel: string;
   status: BookingStatus;
@@ -272,6 +276,7 @@ export async function createBookingHold(input: CreateBookingInput): Promise<Book
 function toAdminBookingSummary(row: BookingRow): AdminBookingSummary {
   return {
     id: row.id,
+    source: 'app',
     serviceType: row.service_type,
     serviceLabel: BOOKING_SERVICES[row.service_type].label,
     status: row.status,
@@ -282,6 +287,27 @@ function toAdminBookingSummary(row: BookingRow): AdminBookingSummary {
     clientEmail: row.client_email,
     clientPhone: row.client_phone,
     googleEventId: row.google_event_id,
+  };
+}
+
+function toImportedCalendarBookingSummary(event: GoogleCalendarImportedEvent): AdminBookingSummary {
+  const startsAt = new Date(event.startsAt);
+  const endsAt = new Date(event.endsAt);
+  const durationMinutes = Math.max(1, Math.round((endsAt.getTime() - startsAt.getTime()) / 60_000));
+
+  return {
+    id: `calendar:${event.eventId}`,
+    source: 'google_calendar',
+    serviceType: 'free',
+    serviceLabel: event.summary,
+    status: 'confirmed',
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    durationMinutes,
+    clientName: event.attendeeName ?? event.summary,
+    clientEmail: event.attendeeEmail,
+    clientPhone: null,
+    googleEventId: event.eventId,
   };
 }
 
@@ -576,9 +602,13 @@ export async function listAdminBookings(limit = 30): Promise<AdminBookingSummary
   if (error) throw error;
 
   const rows = await reconcileCalendarDeletedBookings((data ?? []) as BookingRow[]);
+  const appGoogleEventIds = new Set(rows.map((row) => row.google_event_id).filter(Boolean));
+  const importedEvents = await listUpcomingCalendarEvents(Math.max(limit, 20));
+  const importedBookings = importedEvents
+    .filter((event) => !event.appBookingId && !appGoogleEventIds.has(event.eventId))
+    .map(toImportedCalendarBookingSummary);
 
-  return rows
-    .map(toAdminBookingSummary)
+  return [...rows.map(toAdminBookingSummary), ...importedBookings]
     .sort((a, b) => bookingSortValue(a) - bookingSortValue(b));
 }
 
@@ -710,6 +740,7 @@ export async function confirmBookingFromStripe(session: Stripe.Checkout.Session)
     .single();
 
   if (error) throw error;
+  await syncStripeSessionBilling(session);
   return data as BookingRow;
 }
 

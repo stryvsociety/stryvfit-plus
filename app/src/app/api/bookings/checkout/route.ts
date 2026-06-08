@@ -97,7 +97,7 @@ export async function POST(req: Request) {
 
   const checkoutSession = await stripe().checkout.sessions.create({
     mode: service.paymentMode === 'subscription' ? 'subscription' : 'payment',
-    customer_email: appUser.email,
+    ...(appUser.stripe_customer_id ? { customer: appUser.stripe_customer_id } : { customer_email: appUser.email }),
     client_reference_id: booking.id,
     line_items: [{ price: priceId, quantity: 1 }],
     expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
