@@ -212,6 +212,7 @@ html, body {
 .auth-shell {
   display: grid;
   min-height: 100dvh;
+  overflow-x: hidden;
   place-items: center;
   padding: clamp(3rem, 8vh, 5rem) 1.5rem;
 }
@@ -219,7 +220,8 @@ html, body {
 .auth-panel {
   margin-inline: auto;
   display: flex;
-  width: min(100%, 36rem);
+  width: 100%;
+  max-width: min(36rem, calc(100vw - 3rem));
   flex-direction: column;
   align-items: center;
   text-align: center;
