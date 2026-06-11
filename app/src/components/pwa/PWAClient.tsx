@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { reportIncident } from '@/lib/reportIncident';
+import { isRecoverableChunkLoadError, recoverFromStaleAppShell } from '@/lib/clientAssetRecovery';
 
 const HAPTIC_SELECTOR = 'button, a[href], [role="button"], summary';
 const OPTIONAL_SERVICE_WORKER_ERRORS = [
@@ -101,7 +103,9 @@ function canRegisterServiceWorker(): boolean {
 }
 
 export function PWAClient() {
+  const pathname = usePathname();
   const [updateReady, setUpdateReady] = useState(false);
+  const hidePromptsOnAdminSignIn = pathname?.startsWith('/sign-in-admin') ?? false;
 
   useEffect(() => {
     async function reportClerkAssetErrorIfStillBroken(input: {
@@ -131,6 +135,43 @@ export function PWAClient() {
       if (loadMessage && isServiceWorkerErrorOptional(loadMessage)) return;
       const message = loadMessage || event.message || 'Unhandled browser error';
 
+      if (isRecoverableChunkLoadError(message)) {
+        void recoverFromStaleAppShell().then((reloading) => {
+          if (reloading) return;
+
+          if (isClerkChunkOrAssetError(message)) {
+            void reportClerkAssetErrorIfStillBroken({
+              message,
+              stack: event.error?.stack,
+              context: {
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno,
+                eventType: event.type,
+                staleShellRecoveryAttempted: true,
+              },
+            });
+            return;
+          }
+
+          void reportIncident({
+            source: 'client',
+            severity: loadMessage ? 'medium' : 'high',
+            message,
+            stack: event.error?.stack,
+            context: {
+              filename: event.filename,
+              lineno: event.lineno,
+              colno: event.colno,
+              eventType: event.type,
+              staleShellRecoveryAttempted: true,
+            },
+            admin_action: 'Auto-filed from global error listener after stale shell recovery was already attempted.',
+          });
+        });
+        return;
+      }
+
       if (isClerkChunkOrAssetError(message)) {
         void reportClerkAssetErrorIfStillBroken({
           message,
@@ -153,6 +194,31 @@ export function PWAClient() {
       const details = rejectionDetails(event.reason);
       if (!details) return;
       if (isServiceWorkerErrorOptional(event.reason) || isServiceWorkerErrorOptional(details.message)) return;
+
+      if (isRecoverableChunkLoadError(details.message)) {
+        void recoverFromStaleAppShell().then((reloading) => {
+          if (reloading) return;
+
+          if (isClerkChunkOrAssetError(details.message)) {
+            void reportClerkAssetErrorIfStillBroken({
+              message: details.message,
+              stack: details.stack,
+              context: { reason: details.reason, staleShellRecoveryAttempted: true },
+            });
+            return;
+          }
+
+          void reportIncident({
+            source: 'client',
+            severity: 'medium',
+            message: details.message,
+            stack: details.stack,
+            context: { reason: details.reason, staleShellRecoveryAttempted: true },
+            admin_action: 'Auto-filed from unhandled promise rejection after stale shell recovery was already attempted.',
+          });
+        });
+        return;
+      }
 
       if (isClerkChunkOrAssetError(details.message)) {
         void reportClerkAssetErrorIfStillBroken({
@@ -303,7 +369,7 @@ export function PWAClient() {
     return null;
   }, [updateReady]);
 
-  if (!banner) return null;
+  if (!banner || hidePromptsOnAdminSignIn) return null;
 
   const Icon = banner.icon;
 

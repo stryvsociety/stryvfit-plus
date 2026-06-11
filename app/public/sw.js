@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v27';
+const CACHE_VERSION = 'v28';
 const STATIC_CACHE = `stryvfit-static-${CACHE_VERSION}`;
 const PAGE_CACHE = `stryvfit-pages-${CACHE_VERSION}`;
 const CORE_ROUTES = ['/', '/book', '/notes', '/meals', '/coach', '/admin/pulse'];

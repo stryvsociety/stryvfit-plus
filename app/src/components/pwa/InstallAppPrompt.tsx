@@ -76,32 +76,37 @@ export function InstallAppPrompt() {
   }
 
   return (
-    <aside className="mt-5 rounded-md border border-gold/20 bg-surface-2/82 p-4 text-text shadow-glass">
-      <div className="flex items-start gap-3">
-        <Download className="mt-0.5 h-5 w-5 flex-none text-gold" strokeWidth={1.7} />
-        <div className="min-w-0 flex-1">
+    <aside
+      data-floating-install-prompt
+      className="pointer-events-none fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-[55] flex justify-start sm:inset-x-auto sm:left-5 sm:w-[22rem]"
+    >
+      <div className="pointer-events-auto flex w-full max-w-[22rem] items-center gap-3 rounded-[22px] border border-white/14 bg-[#111111]/90 p-3 text-text shadow-[0_18px_46px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl">
+        <Download className="h-5 w-5 flex-none text-gold" strokeWidth={1.7} />
+        <div className="min-w-0 flex-1 text-left">
           <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-text">
             Install StryvFit+
           </p>
-          <p className="mt-1 font-body text-xs leading-relaxed text-text-muted">{promptCopy}</p>
+          <p className="mt-0.5 font-body text-xs leading-snug text-text-muted">{promptCopy}</p>
+        </div>
+        <div className="flex flex-none items-center gap-1">
           {installPrompt ? (
             <button
               type="button"
               onClick={handleInstall}
-              className="ios-pill mt-3 inline-flex min-h-9 items-center justify-center rounded-full bg-gold px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-bg transition-colors hover:bg-gold-deep"
+              className="ios-pill inline-flex min-h-9 items-center justify-center rounded-full bg-gold px-3 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-bg transition-colors hover:bg-gold-deep"
             >
-              Install app
+              Install
             </button>
           ) : null}
+          <button
+            type="button"
+            aria-label="Dismiss install prompt"
+            onClick={dismiss}
+            className="ios-pill rounded-full p-1 text-text-dim transition-colors hover:text-text"
+          >
+            <X className="h-4 w-4" strokeWidth={1.8} />
+          </button>
         </div>
-        <button
-          type="button"
-          aria-label="Dismiss install prompt"
-          onClick={dismiss}
-          className="ios-pill rounded-full p-1 text-text-dim transition-colors hover:text-text"
-        >
-          <X className="h-4 w-4" strokeWidth={1.8} />
-        </button>
       </div>
     </aside>
   );

@@ -2,22 +2,25 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 
 const BUG_ZAP_MESSAGE = "yesterday's bugs have been zapped";
 
 export function BugZapNotice() {
+  const pathname = usePathname();
   const [visible, setVisible] = useState(true);
   const touchStartX = useRef<number | null>(null);
+  const hideOnAdminSignIn = pathname?.startsWith('/sign-in-admin') ?? false;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setVisible(false), 6000);
     return () => window.clearTimeout(timer);
   }, []);
 
-  if (!visible) return null;
+  if (hideOnAdminSignIn || !visible) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-[60] flex justify-start sm:inset-x-auto sm:left-5 sm:w-[22rem]">
+    <div className="bug-zap-notice pointer-events-none fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-[60] flex justify-start sm:inset-x-auto sm:left-5 sm:w-[22rem]">
       <div
         role="status"
         aria-live="polite"

@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   applicationName: 'StryvAdmin',
-  manifest: '/admin-manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'StryvAdmin' },
+  manifest: null,
+  appleWebApp: null,
   other: {
     'apple-mobile-web-app-title': 'StryvAdmin',
   },

@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
-import { ADMIN_SIGN_IN_PATH } from '@/lib/routes';
+import { ADMIN_SIGN_IN_PATH, MEMBER_SIGN_IN_PATH } from '@/lib/routes';
 import {
   CLERK_PROXY_PATH,
   adminCanonicalUrlForRequest,
@@ -25,7 +25,7 @@ const isAdminProtectedRoute = createRouteMatcher(['/admin(.*)', '/api/admin(.*)'
 const isAdminPublicRoute = createRouteMatcher(['/sign-in-admin(.*)', '/admin/access-denied']);
 
 function memberSignInUrl(req: Request & { nextUrl: URL }): URL {
-  const signIn = new URL('/sign-in', req.url);
+  const signIn = new URL(MEMBER_SIGN_IN_PATH, req.url);
   signIn.searchParams.set('redirect_url', `${req.nextUrl.pathname}${req.nextUrl.search}`);
   return signIn;
 }

@@ -3,6 +3,7 @@
 import React from 'react';
 import { reportIncident } from '@/lib/reportIncident';
 import { ClientIncidentFallback } from '@/components/incidents/ClientIncidentFallback';
+import { isRecoverableChunkLoadError, recoverFromStaleAppShell } from '@/lib/clientAssetRecovery';
 
 export class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -20,10 +21,28 @@ export class ErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     this.setState({ componentStack: info.componentStack ?? undefined });
+    const message = error.message || 'React render failure';
+
+    if (isRecoverableChunkLoadError(message)) {
+      void recoverFromStaleAppShell().then((reloading) => {
+        if (!reloading) {
+          void reportIncident({
+            source: 'client',
+            severity: 'high',
+            message,
+            stack: error.stack,
+            context: { componentStack: info.componentStack, staleShellRecoveryAttempted: true },
+            admin_action: 'Auto-filed from React error boundary after stale shell recovery was already attempted.',
+          });
+        }
+      });
+      return;
+    }
+
     void reportIncident({
       source: 'client',
       severity: 'high',
-      message: error.message || 'React render failure',
+      message,
       stack: error.stack,
       context: { componentStack: info.componentStack },
       admin_action: 'Auto-filed from React error boundary.',

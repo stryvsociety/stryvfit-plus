@@ -209,6 +209,46 @@ html, body {
   transition: filter 0.25s ease, opacity 0.25s ease, transform 0.25s ease;
 }
 
+.auth-shell {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: clamp(3rem, 8vh, 5rem) 1.5rem;
+}
+
+.auth-panel {
+  margin-inline: auto;
+  display: flex;
+  width: min(100%, 36rem);
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.auth-clerk-frame {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
+.auth-clerk-frame .cl-rootBox {
+  display: flex !important;
+  justify-content: center !important;
+  margin-inline: auto;
+  width: 100%;
+  max-width: 36rem;
+}
+
+.auth-clerk-frame .cl-card {
+  margin-inline: auto !important;
+  width: min(100%, 25rem) !important;
+  max-width: 100% !important;
+}
+
+body:has([data-floating-install-prompt]) .bug-zap-notice {
+  bottom: calc(env(safe-area-inset-bottom) + 6.75rem);
+}
+
 a:hover .logo-wordmark,
 button:hover .logo-wordmark,
 .logo-wordmark:hover {

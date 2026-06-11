@@ -94,57 +94,6 @@ function clientRosterKey(email: string | null | undefined, name: string): string
   return (email?.trim().toLowerCase() || name.trim().toLowerCase()).replace(/\s+/g, ' ');
 }
 
-function clientSummaryFromBooking(booking: AdminBookingSummary): AdminClientSummary {
-  if (booking.source === 'google_calendar') {
-    return {
-      id: `calendar-client:${booking.id}`,
-      name: clientNameFromBooking(booking),
-      email: booking.clientEmail,
-      phone: booking.clientPhone,
-      status: 'Google Calendar event',
-      goal: booking.serviceLabel,
-      payment: 'Calendar only',
-    };
-  }
-
-  return {
-    id: `booking:${booking.id}`,
-    name: clientNameFromBooking(booking),
-    email: booking.clientEmail,
-    phone: booking.clientPhone,
-    status: booking.serviceType === 'free' ? 'First session booked' : 'Booked',
-    goal: booking.serviceLabel,
-    payment: booking.status === 'pending_payment' ? 'Payment pending' : 'Active',
-  };
-}
-
-function buildClientRoster(bookings: AdminBookingSummary[], initialClients: AdminClientSummary[]): AdminClientSummary[] {
-  const byName = new Map<string, AdminClientSummary>();
-
-  for (const client of initialClients) {
-    byName.set(clientRosterKey(client.email, client.name), client);
-  }
-
-  for (const booking of bookings) {
-    const bookingClient = clientSummaryFromBooking(booking);
-    const key = clientRosterKey(bookingClient.email, bookingClient.name);
-    const existing = byName.get(key);
-
-    if (existing) {
-      byName.set(key, {
-        ...existing,
-        status: bookingClient.status,
-        goal: bookingClient.goal,
-        payment: existing.payment === 'No billing yet' ? bookingClient.payment : existing.payment,
-      });
-    } else {
-      byName.set(key, bookingClient);
-    }
-  }
-
-  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
-}
-
 function upsertClientSummary(clients: AdminClientSummary[], ...nextClients: AdminClientSummary[]): AdminClientSummary[] {
   const byKey = new Map(clients.map((item) => [clientRosterKey(item.email, item.name), item]));
   for (const client of nextClients) {
@@ -188,10 +137,8 @@ export function TrainerOpsStudio({
       ),
     [createdClients, deletedClientIds, initialClients]
   );
-  const clients = useMemo(() => buildClientRoster(bookings, baseClients), [baseClients, bookings]);
-  const [selectedClient, setSelectedClient] = useState(
-    () => initialClients[0]?.name ?? (initialBookings[0] ? clientNameFromBooking(initialBookings[0]) : '')
-  );
+  const clients = baseClients;
+  const [selectedClient, setSelectedClient] = useState(() => initialClients[0]?.name ?? '');
   const filteredClients = useMemo(() => {
     const query = clientSearch.trim().toLowerCase();
     if (!query) return clients;
@@ -885,6 +832,26 @@ function startsAtFromDraft(draft: BookingEditDraft): string {
   return combineBookingTzDateAndTime(draft.date, draft.time || '09:00').toISOString();
 }
 
+type AppointmentWindow = 'today' | 'month';
+
+const appointmentDatePartsFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  timeZone: 'America/New_York',
+});
+
+function appointmentDateKey(value: string | Date): string | null {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return null;
+
+  const parts = appointmentDatePartsFormatter.formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  return year && month && day ? `${year}-${month}-${day}` : null;
+}
+
 function AppointmentsPanel({
   bookings,
   cancelingBookingId,
@@ -900,9 +867,23 @@ function AppointmentsPanel({
   onCancelBooking: (bookingId: string) => Promise<void>;
   onUpdateBooking: (bookingId: string, draft: BookingEditPayload) => Promise<void>;
 }) {
-  const firstFreeSession = bookings.find((booking) => booking.source !== 'google_calendar' && booking.serviceType === 'free');
+  const [appointmentWindow, setAppointmentWindow] = useState<AppointmentWindow>('today');
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [editDrafts, setEditDrafts] = useState<Record<string, BookingEditDraft>>({});
+  const visibleBookings = useMemo(() => {
+    const todayKey = appointmentDateKey(new Date());
+    if (!todayKey) return bookings;
+
+    const monthKey = todayKey.slice(0, 7);
+    return bookings.filter((booking) => {
+      const bookingKey = appointmentDateKey(booking.startsAt);
+      if (!bookingKey) return false;
+      return appointmentWindow === 'today' ? bookingKey === todayKey : bookingKey.startsWith(monthKey);
+    });
+  }, [appointmentWindow, bookings]);
+  const firstFreeSession = visibleBookings.find(
+    (booking) => booking.source !== 'google_calendar' && booking.serviceType === 'free'
+  );
 
   function beginEdit(booking: AdminBookingSummary) {
     setEditDrafts((current) => ({ ...current, [booking.id]: current[booking.id] ?? editDraftFromBooking(booking) }));
@@ -943,6 +924,29 @@ function AppointmentsPanel({
           <div className="min-w-0">
             <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Live bookings</p>
             <h2 className="mt-1 font-section text-4xl leading-none">Appointment command</h2>
+          </div>
+          <div className="inline-flex rounded-full border border-[#dedbd4] bg-[#fbfaf8] p-1">
+            {[
+              ['today', 'Today'],
+              ['month', 'This month'],
+            ].map(([value, label]) => {
+              const active = appointmentWindow === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setAppointmentWindow(value as AppointmentWindow)}
+                  className={`ios-pill min-h-9 rounded-full px-4 font-caption text-[9px] uppercase tracking-[0.13em] transition ${
+                    active
+                      ? 'bg-[#151515] text-white'
+                      : 'text-[#6d675f] hover:bg-white hover:text-[#151515]'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -989,8 +993,17 @@ function AppointmentsPanel({
                 Confirmed sessions from the client booking flow will appear here.
               </p>
             </article>
+          ) : visibleBookings.length === 0 ? (
+            <article className="rounded-md border border-dashed border-[#dedbd4] bg-[#fbfaf8] p-6 text-center">
+              <p className="font-headline text-xl uppercase text-[#151515]">
+                {appointmentWindow === 'today' ? 'No appointments today' : 'No appointments this month'}
+              </p>
+              <p className="mt-2 font-body text-sm text-[#6d675f]">
+                Switch views or use the scheduler below to add a new block.
+              </p>
+            </article>
           ) : (
-            bookings.map((booking) => {
+            visibleBookings.map((booking) => {
               const editing = editingBookingId === booking.id;
               const draft = editDrafts[booking.id] ?? editDraftFromBooking(booking);
               const busy = cancelingBookingId === booking.id || updatingBookingId === booking.id;

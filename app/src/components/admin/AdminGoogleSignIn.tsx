@@ -17,25 +17,29 @@ export function AdminGoogleSignIn() {
   }, [isLoaded, isSignedIn, router]);
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-bg px-6 py-16 text-text">
-      <section className="w-full max-w-md">
+    <main className="auth-shell bg-bg text-text">
+      <section className="auth-panel">
         <div className="mb-8 flex justify-center">
           <BrandWordmark className="w-[230px]" />
         </div>
         <p className="mb-4 text-center font-caption text-[10px] uppercase tracking-[0.18em] text-gold">
           StryvAdmin
         </p>
-        <SignIn
-          routing="path"
-          path={ADMIN_SIGN_IN_PATH}
-          forceRedirectUrl="/admin/pulse"
-          fallbackRedirectUrl="/admin/pulse"
-          appearance={{
-            elements: {
-              footer: { display: 'none' },
-            },
-          }}
-        />
+        <div className="auth-clerk-frame">
+          <SignIn
+            routing="path"
+            path={ADMIN_SIGN_IN_PATH}
+            forceRedirectUrl="/admin/pulse"
+            fallbackRedirectUrl="/admin/pulse"
+            appearance={{
+              elements: {
+                card: 'mx-auto w-full',
+                footer: { display: 'none' },
+                rootBox: 'mx-auto w-full',
+              },
+            }}
+          />
+        </div>
         <p className="mt-4 text-center font-body text-xs text-text-muted">
           Sign in with Google. Only emails in ADMIN_EMAILS can open StryvAdmin.
         </p>
