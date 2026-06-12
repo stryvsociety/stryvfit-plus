@@ -40,6 +40,7 @@ Official references:
 4. Configure Ideal Nutrition handoff.
    - Set the trainer affiliate code in the meal link configuration when available.
    - Use `/admin/pulse` or `/admin/nutrition` to recommend the four meals clients should see.
+   - Backend meal-plan persistence is `/api/admin/meal-plans` and client reads are `/api/client/meal-plans`.
    - Client-side meal cards should show only trainer-recommended meals and the affiliate-ready external link.
    - Client notes and meal-change requests persist through `/api/client/requests` and can be reviewed through `/api/admin/client-requests` once the visible UI is wired.
 

@@ -49,6 +49,7 @@ Meal prep:
 - The meal prep phase lets users search/filter Ideal Nutrition meals.
 - Selected meals update cost, protein, calories, and the Pulse brief.
 - The standalone page is `/meals`.
+- Published meal plans have backend storage ready; visible meal-card delivery still needs the frontend wiring pass.
 - Client meal-change requests have backend storage ready; visible delivery still depends on the current frontend wiring pass.
 
 Journaling:
@@ -91,6 +92,7 @@ Use it to:
 - Schedule the workout block.
 - Use "Post to client" for current UX feedback; backend storage and client reads are ready, but visible delivery still needs a frontend wiring pass.
 - Saved workout routine data is available through backend APIs; direct wger mirroring needs the wger host and API token configured.
+- Saved meal plan data is available through `/api/admin/meal-plans` and `/api/client/meal-plans` once frontend wiring is allowed.
 
 Open `/admin/settings` for trainer-facing settings:
 
