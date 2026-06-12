@@ -46,6 +46,8 @@ export type AdminPublishRecord = {
   updatedAt: string;
 };
 
+type ClientPublishTarget = Pick<AppUser, 'id' | 'email'>;
+
 type AdminPublishRow = {
   id: string;
   client_id: string | null;
@@ -90,6 +92,10 @@ const SURFACE_ALIASES: Record<string, AdminPublishSurface> = {
   workouts: 'workout_plan',
   workout_plan: 'workout_plan',
 };
+
+function normalizeLimit(limit = 30): number {
+  return Math.min(Math.max(Math.trunc(limit), 1), 100);
+}
 
 export class AdminPublishValidationError extends Error {
   constructor(message: string) {
@@ -197,6 +203,34 @@ function toAdminPublishRecord(row: AdminPublishRow): AdminPublishRecord {
   };
 }
 
+export function adminPublishRecordVisibleToClient(
+  record: Pick<AdminPublishRecord, 'clientId' | 'clientEmail' | 'status'>,
+  appUser: ClientPublishTarget
+): boolean {
+  if (record.status !== 'published') return false;
+  if (record.clientId && record.clientId === appUser.id) return true;
+
+  const recordEmail = record.clientEmail?.trim().toLowerCase();
+  return Boolean(recordEmail && recordEmail === appUser.email.trim().toLowerCase());
+}
+
+export function mergeClientPublishRecords(
+  records: AdminPublishRecord[],
+  appUser: ClientPublishTarget,
+  limit = 30
+): AdminPublishRecord[] {
+  const cappedLimit = normalizeLimit(limit);
+  const byId = new Map<string, AdminPublishRecord>();
+
+  for (const record of records) {
+    if (adminPublishRecordVisibleToClient(record, appUser)) byId.set(record.id, record);
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+    .slice(0, cappedLimit);
+}
+
 async function resolveClientTarget(input: NormalizedAdminPublishInput): Promise<{
   clientId: string | null;
   clientEmail: string | null;
@@ -252,7 +286,7 @@ export async function createAdminPublishRecord(
 }
 
 export async function listAdminPublishRecords(limit = 30): Promise<AdminPublishRecord[]> {
-  const cappedLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
+  const cappedLimit = normalizeLimit(limit);
   const { data, error } = await serviceClient()
     .from('admin_publish_records')
     .select(ADMIN_PUBLISH_SELECT)
@@ -261,4 +295,36 @@ export async function listAdminPublishRecords(limit = 30): Promise<AdminPublishR
 
   if (error) throw error;
   return ((data ?? []) as AdminPublishRow[]).map(toAdminPublishRecord);
+}
+
+export async function listClientPublishRecords(
+  appUser: ClientPublishTarget,
+  limit = 30
+): Promise<AdminPublishRecord[]> {
+  const cappedLimit = normalizeLimit(limit);
+  const email = appUser.email.trim().toLowerCase();
+  const sb = serviceClient();
+
+  const [byClientId, byClientEmail] = await Promise.all([
+    sb
+      .from('admin_publish_records')
+      .select(ADMIN_PUBLISH_SELECT)
+      .eq('status', 'published')
+      .eq('client_id', appUser.id)
+      .order('published_at', { ascending: false })
+      .limit(cappedLimit),
+    sb
+      .from('admin_publish_records')
+      .select(ADMIN_PUBLISH_SELECT)
+      .eq('status', 'published')
+      .eq('client_email', email)
+      .order('published_at', { ascending: false })
+      .limit(cappedLimit),
+  ]);
+
+  if (byClientId.error) throw byClientId.error;
+  if (byClientEmail.error) throw byClientEmail.error;
+
+  const rows = [...((byClientId.data ?? []) as AdminPublishRow[]), ...((byClientEmail.data ?? []) as AdminPublishRow[])];
+  return mergeClientPublishRecords(rows.map(toAdminPublishRecord), appUser, cappedLimit);
 }

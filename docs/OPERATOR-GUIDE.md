@@ -87,7 +87,7 @@ Use it to:
 - Select exercise ideas from the wger library.
 - Review the training week.
 - Schedule the workout block.
-- Use "Post to client" for current UX feedback.
+- Use "Post to client" for current UX feedback; backend storage and client reads are ready, but visible delivery still needs a frontend wiring pass.
 
 Open `/admin/settings` for trainer-facing settings:
 
