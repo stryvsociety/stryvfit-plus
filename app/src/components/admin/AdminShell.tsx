@@ -70,7 +70,7 @@ export function AdminShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const shellClassName = isDark
     ? 'admin-theme-dark bg-[#070e13] text-white'
-    : 'admin-theme-light bg-[#f3f1ec] text-[#151515]';
+    : 'admin-theme-light bg-[#ebe5da] text-[#151515]';
   const adminLogoStyle = { '--text': isDark ? '#ffffff' : '#151515' } as CSSProperties;
   const desktopGridClassName = sidebarCollapsed
     ? 'lg:grid-cols-[76px_minmax(0,1fr)]'
@@ -80,7 +80,7 @@ export function AdminShell({
     <main className={`min-h-dvh ${shellClassName}`}>
       <div className={`grid min-h-dvh transition-[grid-template-columns] duration-300 ease-out ${desktopGridClassName}`}>
         <aside
-          className={`sticky top-0 hidden h-dvh border-r border-[#dedbd4] bg-[#fbfaf8] transition-[padding] duration-300 ease-out lg:flex lg:flex-col ${
+          className={`sticky top-0 hidden h-dvh border-r border-[#dedbd4] bg-[#f1eadf] transition-[padding] duration-300 ease-out lg:flex lg:flex-col ${
             sidebarCollapsed ? 'p-3' : 'p-4'
           }`}
         >
@@ -139,7 +139,7 @@ export function AdminShell({
         </aside>
 
         <section className="min-w-0">
-          <header className="sticky top-0 z-30 border-b border-[#dedbd4] bg-[#f3f1ec]/92 backdrop-blur-xl">
+          <header className="sticky top-0 z-30 border-b border-[#dedbd4] bg-[#ebe5da] backdrop-blur-xl">
             <div className="px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex flex-wrap items-center gap-3 lg:hidden">
                 <Link href="/admin/pulse" aria-label="StryvAdmin home" className="rounded-md bg-[#151515] px-3 py-2">

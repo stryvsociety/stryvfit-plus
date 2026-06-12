@@ -77,6 +77,64 @@
   color: #8e887f;
 }
 
+.admin-theme-light {
+  --bg: #ebe5da;
+  --surface: #f3ede3;
+  --surface-2: #f6efe5;
+  --surface-3: #ede5da;
+  --border: #d3c8b9;
+  --text: #151515;
+  color-scheme: light;
+  background-color: #ebe5da !important;
+}
+
+.admin-theme-light .bg-white {
+  background-color: #f7efe4 !important;
+}
+
+.admin-theme-light [class*="bg-[#f3f1ec]"],
+.admin-theme-light [class*="bg-[#efede8]"] {
+  background-color: #ebe5da !important;
+}
+
+.admin-theme-light [class*="bg-[#fbfaf8]"],
+.admin-theme-light [class*="bg-[#f7f7f5]"],
+.admin-theme-light [class*="bg-[#f5f2ed]"] {
+  background-color: #f1eadf !important;
+}
+
+.admin-theme-light [class*="bg-[#fff3ec]"] {
+  background-color: #f4e2d4 !important;
+}
+
+.admin-theme-light [class*="border-[#dedbd4]"],
+.admin-theme-light [class*="border-[#e6e2da]"],
+.admin-theme-light [class*="border-[#d9d7d1]"] {
+  border-color: #d3c8b9 !important;
+}
+
+.admin-theme-light [class*="text-[#66615a]"],
+.admin-theme-light [class*="text-[#6d675f]"] {
+  color: #5f574d !important;
+}
+
+.admin-theme-light [class*="text-[#817b72]"] {
+  color: #746a5d !important;
+}
+
+.admin-theme-light input,
+.admin-theme-light textarea,
+.admin-theme-light select {
+  background-color: #f3ede3 !important;
+  border-color: #d3c8b9 !important;
+  color: #151515 !important;
+}
+
+.admin-theme-light input::placeholder,
+.admin-theme-light textarea::placeholder {
+  color: #887d70;
+}
+
 .client-theme-light {
   --bg: #f7f7f5;
   --surface: #ffffff;
