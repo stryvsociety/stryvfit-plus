@@ -239,8 +239,8 @@ function SidebarToggleButton({ collapsed, onToggle }: { collapsed: boolean; onTo
 
 function AdminBreadcrumbs({ breadcrumbs }: { breadcrumbs: Breadcrumb[] }) {
   return (
-    <nav aria-label="Breadcrumb" className="min-w-0">
-      <ol className="flex min-h-10 min-w-0 flex-wrap items-center gap-2 px-1">
+    <nav aria-label="Breadcrumb" data-testid="admin-breadcrumbs" className="min-w-0 border-0 bg-transparent shadow-none">
+      <ol className="flex min-w-0 flex-wrap items-center gap-2 border-0 bg-transparent p-0 shadow-none">
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
           return (
