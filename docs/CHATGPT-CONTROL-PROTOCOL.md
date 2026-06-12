@@ -36,6 +36,8 @@ On every new onboarding or support session:
 - `/admin/settings`: trainer settings.
 - `/api/admin/workout-routines`: backend save/publish path for workout routines.
 - `/api/client/workout-routines`: authenticated client read path for published workout routines.
+- `/api/client/requests`: authenticated client note/meal-change request persistence.
+- `/api/admin/client-requests`: admin review/status path for client requests.
 
 Expected UI controls:
 

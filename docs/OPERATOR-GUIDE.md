@@ -49,6 +49,7 @@ Meal prep:
 - The meal prep phase lets users search/filter Ideal Nutrition meals.
 - Selected meals update cost, protein, calories, and the Pulse brief.
 - The standalone page is `/meals`.
+- Client meal-change requests have backend storage ready; visible delivery still depends on the current frontend wiring pass.
 
 Journaling:
 

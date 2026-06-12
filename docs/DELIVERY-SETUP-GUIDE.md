@@ -41,6 +41,7 @@ Official references:
    - Set the trainer affiliate code in the meal link configuration when available.
    - Use `/admin/pulse` or `/admin/nutrition` to recommend the four meals clients should see.
    - Client-side meal cards should show only trainer-recommended meals and the affiliate-ready external link.
+   - Client notes and meal-change requests persist through `/api/client/requests` and can be reviewed through `/api/admin/client-requests` once the visible UI is wired.
 
 5. Configure scheduling behavior.
    - In StryvAdmin, set booking start times, buffer time, blocked times, and duration options.
