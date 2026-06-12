@@ -72,7 +72,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 
 - Client phase flow (`ClientPhaseFlow`) still uses URL query params for remote workout countdown demos (`?session=remote`, `?pastDueDays=7`). This is separate from the production booking flow on `/book`.
 - Subscription past-due lockout on the phase flow is not yet tied to live Stripe subscription state.
-- "Post to client" is currently UX/stateful feedback. It is not a full persistence/publish pipeline until a backend write path is added.
+- "Post to client" now has a backend persistence route at `/api/admin/publish`; the visible buttons remain stateful UX until a frontend wiring pass is allowed.
 - `/admin/workouts` reads wger exercise data through the app proxy but does not yet write private wger routines.
 
 ## Validation Gates
