@@ -55,6 +55,7 @@ Journaling:
 
 - The journal phase asks short reflection prompts after workout/meal prep.
 - This is currently local UI, not a complete saved journal backend.
+- Trainer notes have backend storage ready for `/notes`; visible rendering still needs the frontend wiring pass.
 
 Payment prompts:
 

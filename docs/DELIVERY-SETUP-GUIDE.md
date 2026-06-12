@@ -29,7 +29,7 @@ Official references:
    - `/book` is the installable PWA entry.
    - `/meals` is a direct meal-prep surface.
    - `/coach` is the coach contact surface.
-   - `/notes` is the trainer-note surface.
+   - `/notes` is the trainer-note surface; backend APIs are `/api/admin/client-notes` and `/api/client/notes`.
 
 3. Configure trainer identity.
    - Open `/admin/settings`.

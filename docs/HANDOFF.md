@@ -39,7 +39,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - `/`: public landing page.
 - `/book`: client app phase flow. Query helpers currently include `?session=remote`, `?session=in-person`, and `?pastDueDays=7`.
 - `/meals`: standalone Ideal Nutrition meal prep picker.
-- `/notes`: placeholder trainer notes page.
+- `/notes`: client trainer notes page. Backend read/write routes exist; the visible page still needs a frontend wiring pass.
 - `/coach`: iMessage CTA to the configured trainer phone.
 - `/admin/pulse`: StryvAdmin appointment and meal command center.
 - `/admin/workouts`: trainer workout builder with wger exercise library.
@@ -50,6 +50,8 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - `/api/client/posts`: authenticated client read path for published admin posts.
 - `/api/client/requests`: authenticated client note/meal-change request persistence.
 - `/api/admin/client-requests`: admin review/status path for client note/meal-change requests.
+- `/api/admin/client-notes`: admin trainer-note creation and publish path.
+- `/api/client/notes`: authenticated client read path for published trainer notes.
 - `/api/incidents`: incident health, support capture, dedupe, and Linear filing.
 - `/api/incidents/sync-resolution`: marks incidents resolved and publishes update records.
 
@@ -80,6 +82,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - "Post to client" now has backend persistence at `/api/admin/publish` and authenticated client reads at `/api/client/posts`; the visible buttons remain stateful UX until a frontend wiring pass is allowed.
 - `/admin/workouts` has backend routine persistence through `/api/admin/workout-routines`; direct multi-endpoint wger sync remains dependent on a reachable wger host plus `WGER_API_TOKEN`.
 - Client note and meal-plan-change requests have Supabase-backed APIs; the visible meal planner still uses the legacy local browser helper until frontend wiring is allowed.
+- Trainer notes have modern Clerk/app-user-backed APIs; the `/notes` page remains visually placeholder until frontend wiring is allowed.
 
 ## Validation Gates
 

@@ -38,6 +38,8 @@ On every new onboarding or support session:
 - `/api/client/workout-routines`: authenticated client read path for published workout routines.
 - `/api/client/requests`: authenticated client note/meal-change request persistence.
 - `/api/admin/client-requests`: admin review/status path for client requests.
+- `/api/admin/client-notes`: admin trainer-note creation and publish path.
+- `/api/client/notes`: authenticated client read path for published trainer notes.
 
 Expected UI controls:
 
