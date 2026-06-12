@@ -14,11 +14,9 @@ import {
   Pencil,
   Phone,
   Plus,
-  Ruler,
   Save,
   Search,
   ShoppingCart,
-  Tag,
   Trash2,
   Utensils,
   UserPlus,
@@ -471,6 +469,8 @@ export function TrainerOpsStudio({
   const [addingClient, setAddingClient] = useState(false);
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
   const [clientNotice, setClientNotice] = useState<string | null>(null);
+  const [requests, setRequests] = useState<AdminClientRequest[]>([]);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
   const [mealPlanSnapshot, setMealPlanSnapshot] = useState<MealPrepPlanSnapshot | null>(null);
   const baseClients = useMemo(
     () =>
@@ -506,6 +506,9 @@ export function TrainerOpsStudio({
     () => filteredClients.filter((client) => client.name !== selected.name && clientNeedsAttention(client)),
     [filteredClients, selected.name]
   );
+  const selectedRailMeta = metaForClient(selected, clientMeta[clientMetaKey(selected)]);
+  const selectedRequests = requests.filter((request) => requestMatchesClient(request, selected));
+  const canRemoveSelected = isStoredClientProfile(selected);
 
   function selectTab(nextTab: AdminTab) {
     setTab(nextTab);
@@ -776,6 +779,34 @@ export function TrainerOpsStudio({
     }
   }, [clients, selectedClient]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshRequests() {
+      setRequestsError(null);
+      try {
+        const response = await fetch('/api/admin/client-requests?limit=80&status=new');
+        const payload = (await response.json().catch(() => null)) as {
+          requests?: AdminClientRequest[];
+          error?: string;
+        } | null;
+        if (!response.ok) throw new Error(payload?.error ?? 'Unable to load client requests');
+        if (!cancelled) setRequests(payload?.requests ?? []);
+      } catch (error) {
+        if (!cancelled) setRequestsError(error instanceof Error ? error.message : 'Unable to load client requests');
+      }
+    }
+
+    const handleFocus = () => void refreshRequests();
+
+    void refreshRequests();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
   return (
     <AdminShell
       active={tab}
@@ -832,10 +863,7 @@ export function TrainerOpsStudio({
               className="fixed bottom-5 right-4 top-36 z-40 w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-3 lg:right-8"
             >
               <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#f24f09]">Clients</p>
-                  <h2 className="mt-1 font-headline text-2xl uppercase leading-none">Client rail</h2>
-                </div>
+                <h2 className="font-headline text-2xl uppercase leading-none">Clients</h2>
                 <button
                   type="button"
                   onClick={() => setClientRailOpen(false)}
@@ -860,7 +888,7 @@ export function TrainerOpsStudio({
                 <div className="admin-fade-stack mt-3 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#f24f09]">Next up</p>
+                      <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#f24f09]">Selected</p>
                       <h3 className="mt-1 truncate font-headline text-xl uppercase leading-none">{selected.name}</h3>
                       <p className="mt-1 truncate font-body text-xs text-[#6d675f]">{selected.goal}</p>
                     </div>
@@ -873,6 +901,10 @@ export function TrainerOpsStudio({
                       ['Session', selected.status],
                       ['Billing', selected.payment],
                       ['Mobile', selected.phone ?? 'Missing'],
+                      ['Body', selectedRailMeta.bodyType],
+                      ['Focus', selectedRailMeta.focus],
+                      ['County', selectedRailMeta.county],
+                      ['Height', selectedRailMeta.height],
                     ].map(([label, value]) => (
                       <div key={label} className="flex items-center justify-between px-0 py-1.5">
                         <dt className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">{label}</dt>
@@ -923,6 +955,44 @@ export function TrainerOpsStudio({
                     )}
                   </div>
                 </div>
+
+                <div className="mt-4 border-t border-[#dedbd4] pt-4">
+                  <div className="flex items-center gap-2">
+                    <Inbox className="h-4 w-4 text-[#f24f09]" />
+                    <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Requests</p>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {requestsError ? (
+                      <p className="font-body text-xs leading-relaxed text-[#d12f1b]">{requestsError}</p>
+                    ) : selectedRequests.length === 0 ? (
+                      <p className="font-body text-xs leading-relaxed text-[#6d675f]">
+                        No open client requests for this profile.
+                      </p>
+                    ) : (
+                      selectedRequests.slice(0, 3).map((request) => (
+                        <article key={request.id} className="rounded-md border border-[#e6e2da] bg-white p-3">
+                          <p className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">
+                            {request.kind === 'meal-plan-change' ? 'Meal change' : 'Trainer note'}
+                          </p>
+                          <p className="mt-1 line-clamp-3 font-body text-xs leading-relaxed text-[#6d675f]">
+                            {request.message}
+                          </p>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {clientNotice ? <p className="mt-3 font-body text-xs leading-relaxed text-[#6d675f]">{clientNotice}</p> : null}
+                <button
+                  type="button"
+                  onClick={() => void removeClientById(selected)}
+                  disabled={!canRemoveSelected || deletingClientId === selected.id}
+                  className="ios-pill mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-[#dedbd4] px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Trash2 className="h-4 w-4" strokeWidth={1.7} />
+                  {deletingClientId === selected.id ? 'Removing' : 'Delete profile'}
+                </button>
               </section>
               <section className="mt-3 rounded-md border border-[#dedbd4] bg-white p-3">
                 <button
@@ -992,11 +1062,11 @@ export function TrainerOpsStudio({
                   clients={clients}
                   clientMeta={clientMeta}
                   clientNotice={clientNotice}
-                  deletingClientId={deletingClientId}
-                  selectedClient={selected}
                   selectedClientName={selectedClient}
-                  onRemoveClient={removeClientById}
-                  onSelectClient={setSelectedClient}
+                  onSelectClient={(name) => {
+                    setSelectedClient(name);
+                    setClientRailOpen(true);
+                  }}
                 />
               ) : null}
             </AnimatePresence>
@@ -1019,23 +1089,15 @@ function ClientsPanel({
   clients,
   clientMeta,
   clientNotice,
-  deletingClientId,
-  onRemoveClient,
   onSelectClient,
-  selectedClient,
   selectedClientName,
 }: {
   clients: AdminClientSummary[];
   clientMeta: Record<string, ClientProfileMeta>;
   clientNotice: string | null;
-  deletingClientId: string | null;
-  onRemoveClient: (client: AdminClientSummary) => Promise<void>;
   onSelectClient: (name: string) => void;
-  selectedClient: AdminClientSummary;
   selectedClientName: string;
 }) {
-  const [requests, setRequests] = useState<AdminClientRequest[]>([]);
-  const [requestsError, setRequestsError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const crmClients = useMemo(() => (clients.length > 0 ? clients : [emptyClient]), [clients]);
   const visibleClients = useMemo(() => {
@@ -1050,37 +1112,6 @@ function ClientsPanel({
         .includes(needle);
     });
   }, [clientMeta, crmClients, query]);
-  const selectedMeta = metaForClient(selectedClient, clientMeta[clientMetaKey(selectedClient)]);
-  const selectedRequests = requests.filter((request) => requestMatchesClient(request, selectedClient));
-  const canRemoveSelected = isStoredClientProfile(selectedClient);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function refresh() {
-      setRequestsError(null);
-      try {
-        const response = await fetch('/api/admin/client-requests?limit=80&status=new');
-        const payload = (await response.json().catch(() => null)) as {
-          requests?: AdminClientRequest[];
-          error?: string;
-        } | null;
-        if (!response.ok) throw new Error(payload?.error ?? 'Unable to load client requests');
-        if (!cancelled) setRequests(payload?.requests ?? []);
-      } catch (error) {
-        if (!cancelled) setRequestsError(error instanceof Error ? error.message : 'Unable to load client requests');
-      }
-    }
-
-    const handleFocus = () => void refresh();
-
-    void refresh();
-    window.addEventListener('focus', handleFocus);
-    return () => {
-      cancelled = true;
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, []);
 
   return (
     <motion.section
@@ -1088,9 +1119,9 @@ function ClientsPanel({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]"
+      className="space-y-4"
     >
-      <section className="min-w-0 rounded-md border border-[#dedbd4] bg-white p-4">
+      <section className="min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#f24f09]">Client CRM</p>
@@ -1125,7 +1156,7 @@ function ClientsPanel({
                   type="button"
                   onClick={() => onSelectClient(client.name)}
                   data-active={active ? 'true' : 'false'}
-                  className={`admin-liquid-button grid w-full grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr_80px] gap-3 px-0 py-3 text-left transition ${
+                  className={`admin-liquid-button grid w-full grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr_80px] gap-3 border-t border-[#dedbd4]/70 px-0 py-4 text-left transition ${
                     active ? 'text-[#f24f09]' : 'text-[#151515] hover:text-[#f24f09]'
                   }`}
                 >
@@ -1154,72 +1185,6 @@ function ClientsPanel({
         </div>
         {clientNotice ? <p className="mt-3 font-body text-xs leading-relaxed text-[#6d675f]">{clientNotice}</p> : null}
       </section>
-
-      <aside className="rounded-md border border-[#dedbd4] bg-white p-4 lg:sticky lg:top-24 lg:self-start">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Selected</p>
-            <h3 className="mt-1 truncate font-section text-3xl leading-none">{selectedClient.name}</h3>
-          </div>
-          {clientNeedsAttention(selectedClient) ? (
-            <AlertTriangle className="h-5 w-5 flex-none text-[#d12f1b]" strokeWidth={1.8} />
-          ) : null}
-        </div>
-
-        <div className="mt-4 grid gap-2">
-          {[
-            { icon: Tag, label: 'Body type', value: selectedMeta.bodyType },
-            { icon: Flame, label: 'Focus', value: selectedMeta.focus },
-            { icon: MapPin, label: 'County', value: selectedMeta.county },
-            { icon: Ruler, label: 'Height', value: selectedMeta.height },
-            { icon: Phone, label: 'Mobile', value: selectedClient.phone ?? 'Missing' },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <div key={item.label} className="flex items-center justify-between gap-3 px-0 py-2">
-                <span className="inline-flex items-center gap-2 font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
-                  <Icon className="h-3.5 w-3.5 text-[#f24f09]" strokeWidth={1.7} />
-                  {item.label}
-                </span>
-                <span className="text-right font-body text-xs text-[#151515]">{item.value}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        <section className="mt-4 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
-          <div className="flex items-center gap-2">
-            <Inbox className="h-4 w-4 text-[#f24f09]" />
-            <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Requests</p>
-          </div>
-          <div className="mt-3 space-y-2">
-            {requestsError ? (
-              <p className="font-body text-xs leading-relaxed text-[#d12f1b]">{requestsError}</p>
-            ) : selectedRequests.length === 0 ? (
-              <p className="font-body text-xs leading-relaxed text-[#6d675f]">No open client requests for this profile.</p>
-            ) : (
-              selectedRequests.slice(0, 3).map((request) => (
-                <article key={request.id} className="rounded-md border border-[#e6e2da] bg-white p-3">
-                  <p className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">
-                    {request.kind === 'meal-plan-change' ? 'Meal change' : 'Trainer note'}
-                  </p>
-                  <p className="mt-1 line-clamp-3 font-body text-xs leading-relaxed text-[#6d675f]">{request.message}</p>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
-
-        <button
-          type="button"
-          onClick={() => void onRemoveClient(selectedClient)}
-          disabled={!canRemoveSelected || deletingClientId === selectedClient.id}
-          className="ios-pill mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full border border-[#dedbd4] px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          <Trash2 className="h-4 w-4" strokeWidth={1.7} />
-          {deletingClientId === selectedClient.id ? 'Removing' : 'Delete profile'}
-        </button>
-      </aside>
     </motion.section>
   );
 }
