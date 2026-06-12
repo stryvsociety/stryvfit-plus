@@ -34,6 +34,8 @@ On every new onboarding or support session:
 - `/admin/pulse?tab=meals`: direct meal tab.
 - `/admin/workouts`: workout builder, wger library, support request panel, training week, schedule timeline.
 - `/admin/settings`: trainer settings.
+- `/api/admin/workout-routines`: backend save/publish path for workout routines.
+- `/api/client/workout-routines`: authenticated client read path for published workout routines.
 
 Expected UI controls:
 

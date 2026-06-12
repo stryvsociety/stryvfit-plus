@@ -19,7 +19,7 @@ WGER_API_BASE_URL=https://workouts.stryvsocietyfit.com
 WGER_API_TOKEN=
 ```
 
-Public exercise lookup does not require `WGER_API_TOKEN`. Private routine writes, user-owned schedules, nutrition plans, and workout logs will require a token once those features are added.
+Public exercise lookup does not require `WGER_API_TOKEN`. Private routine sync to wger requires a token and the multi-endpoint routine API once Stryv wants data mirrored into wger itself. The app now persists StryvAdmin workout routines in Supabase through `/api/admin/workout-routines`, exposes published routines through `/api/client/workout-routines`, and records whether wger sync was requested/configured.
 
 ## Data Shape
 
@@ -48,6 +48,7 @@ Expected behavior:
 - Live wger exercises appear above local workout templates.
 - Selecting an exercise changes the plan title.
 - Local templates remain available even if wger falls back.
+- Server-side routine persistence is available at `/api/admin/workout-routines`; a publish request also creates an `/api/admin/publish` workout-plan record for client delivery.
 
 ## Self-Hosted Cloud Stack
 
@@ -149,6 +150,6 @@ When Stryv is ready to publish real routines:
 
 1. Create a wger API token for the service account.
 2. Set `WGER_API_TOKEN` in the app environment.
-3. Add app routes for private routine creation/update.
-4. Map admin workout blocks to wger routine/day/slot/slot-entry structures.
-5. Persist Stryv client-to-wger user/account linkage in Supabase.
+3. Map saved Stryv workout blocks to wger routine/day/slot/slot-entry/config objects.
+4. Persist Stryv client-to-wger user/account linkage in Supabase.
+5. Add a worker that drains routines with `wger_sync_status = 'pending'` and writes each object to the wger routine API.

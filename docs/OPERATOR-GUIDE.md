@@ -88,6 +88,7 @@ Use it to:
 - Review the training week.
 - Schedule the workout block.
 - Use "Post to client" for current UX feedback; backend storage and client reads are ready, but visible delivery still needs a frontend wiring pass.
+- Saved workout routine data is available through backend APIs; direct wger mirroring needs the wger host and API token configured.
 
 Open `/admin/settings` for trainer-facing settings:
 

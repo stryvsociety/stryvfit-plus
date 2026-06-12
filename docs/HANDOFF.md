@@ -45,6 +45,8 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - `/admin/workouts`: trainer workout builder with wger exercise library.
 - `/admin/settings`: trainer phone/name settings.
 - `/api/wger/exercises`: server proxy for exercise lookup from `WGER_API_BASE_URL`.
+- `/api/admin/workout-routines`: admin save/publish path for Stryv workout routines, with optional wger sync state.
+- `/api/client/workout-routines`: authenticated client read path for published workout routines.
 - `/api/client/posts`: authenticated client read path for published admin posts.
 - `/api/incidents`: incident health, support capture, dedupe, and Linear filing.
 - `/api/incidents/sync-resolution`: marks incidents resolved and publishes update records.
@@ -74,7 +76,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - Client phase flow (`ClientPhaseFlow`) still uses URL query params for remote workout countdown demos (`?session=remote`, `?pastDueDays=7`). This is separate from the production booking flow on `/book`.
 - Subscription past-due lockout on the phase flow is not yet tied to live Stripe subscription state.
 - "Post to client" now has backend persistence at `/api/admin/publish` and authenticated client reads at `/api/client/posts`; the visible buttons remain stateful UX until a frontend wiring pass is allowed.
-- `/admin/workouts` reads wger exercise data through the app proxy but does not yet write private wger routines.
+- `/admin/workouts` has backend routine persistence through `/api/admin/workout-routines`; direct multi-endpoint wger sync remains dependent on a reachable wger host plus `WGER_API_TOKEN`.
 
 ## Validation Gates
 
