@@ -1,6 +1,14 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useState } from 'react';
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -68,6 +76,7 @@ export function AdminShell({
 }: AdminShellProps) {
   const isDark = theme === 'dark';
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const expandHoverTimer = useRef<number | null>(null);
   const shellClassName = isDark
     ? 'admin-theme-dark bg-[#050402] text-[#f0ead6]'
     : 'admin-theme-light bg-[#ebe5da] text-[#151515]';
@@ -76,29 +85,87 @@ export function AdminShell({
     ? 'lg:grid-cols-[76px_minmax(0,1fr)]'
     : 'lg:grid-cols-[248px_minmax(0,1fr)]';
 
+  function clearSidebarExpandTimer() {
+    if (expandHoverTimer.current) {
+      window.clearTimeout(expandHoverTimer.current);
+      expandHoverTimer.current = null;
+    }
+  }
+
+  function expandSidebar() {
+    clearSidebarExpandTimer();
+    setSidebarCollapsed(false);
+  }
+
+  function scheduleSidebarExpand() {
+    if (!sidebarCollapsed) return;
+    clearSidebarExpandTimer();
+    expandHoverTimer.current = window.setTimeout(expandSidebar, 3000);
+  }
+
+  function handleCollapsedSidebarClick(event: MouseEvent<HTMLElement>) {
+    if (!sidebarCollapsed) return;
+
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest('a,button,input,select,textarea,[role="button"]')) return;
+    expandSidebar();
+  }
+
+  function handleCollapsedSidebarKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (!sidebarCollapsed || event.target !== event.currentTarget) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      expandSidebar();
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (expandHoverTimer.current) {
+        window.clearTimeout(expandHoverTimer.current);
+        expandHoverTimer.current = null;
+      }
+    };
+  }, []);
+
   return (
     <main className={`min-h-dvh ${shellClassName}`}>
       <div className={`grid min-h-dvh transition-[grid-template-columns] duration-300 ease-out ${desktopGridClassName}`}>
         <aside
+          aria-label={sidebarCollapsed ? 'Collapsed admin sidebar' : 'Admin sidebar'}
+          tabIndex={sidebarCollapsed ? 0 : undefined}
+          onClick={handleCollapsedSidebarClick}
+          onKeyDown={handleCollapsedSidebarKeyDown}
+          onMouseEnter={scheduleSidebarExpand}
+          onMouseMove={scheduleSidebarExpand}
+          onMouseLeave={clearSidebarExpandTimer}
+          onPointerEnter={scheduleSidebarExpand}
+          onPointerMove={scheduleSidebarExpand}
+          onPointerLeave={clearSidebarExpandTimer}
           className={`sticky top-0 hidden h-dvh border-r border-[#dedbd4] bg-[#f1eadf] transition-[padding] duration-300 ease-out lg:flex lg:flex-col ${
             sidebarCollapsed ? 'p-3' : 'p-4'
-          }`}
+          } ${sidebarCollapsed ? 'cursor-pointer' : ''}`}
         >
-          <Link
-            href="/admin/pulse"
-            aria-label="StryvAdmin home"
-            title="StryvAdmin home"
-            style={adminLogoStyle}
-            className={`flex min-h-11 items-center border-0 bg-transparent px-0 py-2 shadow-none transition-all duration-300 ${
-              sidebarCollapsed ? 'justify-center' : 'justify-start'
-            }`}
-          >
-            {sidebarCollapsed ? (
-              <Insignia className="h-7 w-7" />
-            ) : (
-              <BrandWordmark className="w-[172px]" />
-            )}
-          </Link>
+          <div className={`flex min-h-11 items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between gap-2'}`}>
+            <Link
+              href="/admin/pulse"
+              aria-label="StryvAdmin home"
+              title="StryvAdmin home"
+              style={adminLogoStyle}
+              className={`flex items-center border-0 bg-transparent px-0 py-2 shadow-none transition-all duration-300 ${
+                sidebarCollapsed ? 'justify-center' : 'justify-start'
+              }`}
+            >
+              {sidebarCollapsed ? (
+                <Insignia className="h-7 w-7" />
+              ) : (
+                <BrandWordmark className="w-[166px]" />
+              )}
+            </Link>
+            {!sidebarCollapsed ? (
+              <SidebarToggleButton collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(true)} />
+            ) : null}
+          </div>
           <p
             className={`mt-4 font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72] transition-opacity duration-200 ${
               sidebarCollapsed ? 'sr-only' : ''
@@ -151,10 +218,6 @@ export function AdminShell({
               <div className="mt-3 flex flex-wrap items-start justify-between gap-4 lg:mt-0">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <SidebarToggleButton
-                      collapsed={sidebarCollapsed}
-                      onToggle={() => setSidebarCollapsed((current) => !current)}
-                    />
                     <AdminHistoryControls />
                     <AdminBreadcrumbs breadcrumbs={breadcrumbs} />
                   </div>
