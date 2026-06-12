@@ -238,14 +238,14 @@ export function MealPrepPlanner({
               className="min-w-0 flex-1 bg-transparent font-body text-sm text-text outline-none placeholder:text-text-dim"
             />
           </label>
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="admin-fade-tabs flex overflow-x-auto pb-1">
             {filters.map((item) => (
               <button
                 key={item}
                 type="button"
                 onClick={() => setFilter(item)}
                 aria-pressed={filter === item}
-                className={`admin-liquid-button min-h-11 whitespace-nowrap rounded-sm border px-3 font-caption text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                className={`admin-liquid-button min-h-11 whitespace-nowrap border-0 bg-transparent px-3 font-caption text-[10px] uppercase tracking-[0.14em] shadow-none transition-colors ${
                   filter === item
                     ? 'text-gold'
                     : 'text-text-muted hover:text-text'
@@ -275,11 +275,11 @@ export function MealPrepPlanner({
       )}
 
       {admin ? (
-        <section className="rounded-sm border border-border bg-surface-2 p-3">
+        <section className="py-3">
           <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-text-dim">
             Workout flow
           </p>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="admin-fade-tabs mt-3 flex flex-wrap overflow-hidden">
             {workoutFocuses.map((item) => (
               <button
                 key={item}
@@ -289,7 +289,7 @@ export function MealPrepPlanner({
                   setWorkoutFocus(item);
                 }}
                 aria-pressed={workoutFocus === item}
-                className={`admin-liquid-button min-h-11 rounded-sm border px-3 font-caption text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                className={`admin-liquid-button min-h-11 flex-1 basis-1/2 border-0 bg-transparent px-3 font-caption text-[10px] uppercase tracking-[0.14em] shadow-none transition-colors sm:basis-0 ${
                   workoutFocus === item
                     ? 'text-gold'
                     : 'text-text-muted hover:text-text'

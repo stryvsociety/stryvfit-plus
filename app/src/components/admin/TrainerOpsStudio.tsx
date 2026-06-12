@@ -1018,7 +1018,7 @@ function MealsPanel({ selectedClient, onPlanChange }: { selectedClient: string; 
       transition={{ duration: 0.2, ease: 'easeOut' }}
       className="space-y-4"
     >
-      <section className="rounded-md border border-[#dedbd4] bg-white p-4">
+      <section className="min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">
@@ -1027,13 +1027,13 @@ function MealsPanel({ selectedClient, onPlanChange }: { selectedClient: string; 
             <h2 className="mt-1 font-section text-4xl leading-none">Meal plan for {selectedClient}</h2>
             <p className="mt-2 max-w-xl font-body text-sm leading-relaxed text-[#66615a]">{target.note}</p>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="admin-fade-tabs grid grid-cols-3">
             {[
               ['Calories', target.calories],
               ['Protein', target.protein],
               ['Adherence', target.compliance],
             ].map(([label, value]) => (
-              <div key={label} className="min-w-20 rounded-md border border-[#dedbd4] bg-[#f7f7f5] px-3 py-2 text-right">
+              <div key={label} className="min-w-20 px-3 py-2 text-right">
                 <p className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">{label}</p>
                 <p className="mt-1 font-headline text-base uppercase text-[#151515]">{value}</p>
               </div>
@@ -1343,12 +1343,12 @@ function AppointmentsPanel({
       transition={{ duration: 0.2, ease: 'easeOut' }}
       className="space-y-4"
     >
-      <div className="rounded-md border border-[#dedbd4] bg-white p-4">
+      <div className="min-w-0">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="mt-1 font-section text-4xl leading-none">Appointment command</h2>
           </div>
-          <div className="inline-flex rounded-full bg-[#fbfaf8] p-1">
+          <div className="admin-fade-tabs inline-flex overflow-hidden bg-transparent">
             {[
               ['day', 'Day'],
               ['week', 'Week'],
@@ -1361,7 +1361,7 @@ function AppointmentsPanel({
                   type="button"
                   aria-pressed={active}
                   onClick={() => setAppointmentView(value as AppointmentView)}
-                  className={`admin-liquid-button ios-pill min-h-9 rounded-full px-4 font-caption text-[9px] uppercase tracking-[0.13em] transition ${
+                  className={`admin-liquid-button min-h-9 border-0 bg-transparent px-4 font-caption text-[9px] uppercase tracking-[0.13em] shadow-none transition ${
                     active ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#151515]'
                   }`}
                 >

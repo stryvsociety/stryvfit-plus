@@ -208,7 +208,7 @@ export function SolvysSupportDashboard({
                     placeholder="Search issues"
                   />
                 </label>
-                <div className="flex flex-wrap gap-1">
+                <div className="admin-fade-tabs flex flex-wrap overflow-hidden">
                   {filters.map((item) => {
                     const active = filter === item.id;
                     return (
@@ -217,7 +217,7 @@ export function SolvysSupportDashboard({
                         type="button"
                         onClick={() => setFilter(item.id)}
                         aria-pressed={active}
-                        className={`admin-liquid-button min-h-10 rounded-sm px-3 font-caption text-[9px] uppercase tracking-[0.12em] transition ${
+                        className={`admin-liquid-button min-h-10 border-0 bg-transparent px-3 font-caption text-[9px] uppercase tracking-[0.12em] shadow-none transition ${
                           active ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#f24f09]'
                         }`}
                       >

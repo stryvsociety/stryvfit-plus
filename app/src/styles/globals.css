@@ -465,6 +465,18 @@ button:hover .logo-wordmark,
     position: relative;
     z-index: 1;
   }
+  .admin-fade-stack > * + * {
+    background-image: linear-gradient(to right, transparent, rgba(242, 79, 9, 0.28), transparent);
+    background-position: top center;
+    background-repeat: no-repeat;
+    background-size: 100% 1px;
+  }
+  .admin-fade-tabs > * + * {
+    background-image: linear-gradient(to bottom, transparent, rgba(242, 79, 9, 0.3), transparent);
+    background-position: left center;
+    background-repeat: no-repeat;
+    background-size: 1px calc(100% - 1.1rem);
+  }
   .admin-theme-light button:not([data-liquid='off']):not(.admin-liquid-button),
   .admin-theme-dark button:not([data-liquid='off']):not(.admin-liquid-button) {
     position: relative;

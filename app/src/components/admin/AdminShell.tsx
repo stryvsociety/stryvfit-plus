@@ -192,12 +192,12 @@ function AdminHistoryControls() {
   const router = useRouter();
 
   return (
-    <div className="inline-flex items-center gap-1 rounded-full p-1">
+    <div data-testid="admin-history-controls" className="inline-flex items-center gap-2 border-0 bg-transparent p-0 shadow-none">
       <button
         type="button"
         aria-label="Back"
         onClick={() => router.back()}
-        className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6d675f] transition hover:text-[#f24f09] active:scale-95"
+        className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-[#6d675f] shadow-none transition hover:text-[#f24f09] active:scale-95"
       >
         <ArrowLeft className="h-4 w-4" strokeWidth={1.8} />
       </button>
@@ -205,14 +205,14 @@ function AdminHistoryControls() {
         type="button"
         aria-label="Forward"
         onClick={() => router.forward()}
-        className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6d675f] transition hover:text-[#f24f09] active:scale-95"
+        className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-[#6d675f] shadow-none transition hover:text-[#f24f09] active:scale-95"
       >
         <ArrowRight className="h-4 w-4" strokeWidth={1.8} />
       </button>
       <Link
         href="/admin/pulse"
         aria-label="Admin home"
-        className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6d675f] transition hover:text-[#f24f09] active:scale-95"
+        className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center border-0 bg-transparent p-0 text-[#6d675f] shadow-none transition hover:text-[#f24f09] active:scale-95"
       >
         <Home className="h-4 w-4" strokeWidth={1.8} />
       </Link>
@@ -283,7 +283,9 @@ function AdminNavList({
 }) {
   const navClassName = horizontal
     ? 'flex gap-2 overflow-x-auto pb-1'
-    : 'mt-5 grid gap-1';
+    : collapsed
+      ? 'mt-5 grid gap-1'
+      : 'admin-fade-stack mt-5 grid';
 
   return (
     <nav aria-label="Admin navigation" className={navClassName}>
@@ -335,12 +337,12 @@ function AdminNavItem({
     ? `admin-liquid-button relative inline-flex h-11 w-full min-w-0 items-center justify-center overflow-hidden border-0 bg-transparent px-0 font-caption text-[10px] uppercase tracking-[0.13em] transition ${
         active ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#151515]'
       }`
-    : `admin-liquid-button relative inline-flex min-h-11 min-w-0 items-center overflow-hidden rounded-md border font-caption text-[10px] uppercase tracking-[0.13em] transition ${
+    : `admin-liquid-button relative inline-flex min-h-12 min-w-0 items-center overflow-hidden border-0 bg-transparent font-caption text-[10px] uppercase tracking-[0.13em] shadow-none transition ${
         horizontal ? 'flex-none' : 'w-full'
       } gap-3 px-3 ${
         active
-          ? 'border-transparent bg-transparent text-[#f24f09] shadow-none'
-          : 'border-transparent bg-transparent text-[#6d675f] hover:text-[#151515]'
+          ? 'text-[#f24f09]'
+          : 'text-[#6d675f] hover:text-[#151515]'
       }`;
   const content = (
     <>

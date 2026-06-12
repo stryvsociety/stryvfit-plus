@@ -92,7 +92,7 @@ export function AdminWorkoutsPage() {
       title="Workouts"
     >
         <section className="space-y-4">
-            <section className="rounded-md border border-[#dedbd4] bg-white p-4">
+            <section className="min-w-0">
               <label className="block">
                 <span className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Plan title</span>
                 <span className="relative mt-2 block">
@@ -112,9 +112,9 @@ export function AdminWorkoutsPage() {
                 </span>
               </label>
 
-              <div className="mt-4 grid gap-2">
+              <div className="admin-fade-stack mt-4 grid">
                 {movementBlocks.map((block) => (
-                    <article key={block.name} className="grid gap-3 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3 md:grid-cols-[180px_1fr] md:items-start">
+                    <article key={block.name} className="grid gap-3 py-3 md:grid-cols-[180px_1fr] md:items-start">
                       <div>
                         <h2 className="font-headline text-lg uppercase">{block.name}</h2>
                       </div>
