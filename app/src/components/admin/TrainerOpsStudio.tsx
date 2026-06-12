@@ -438,6 +438,31 @@ function AddClientHeaderAction({
   );
 }
 
+function ClientSearchField({
+  disabled,
+  onChange,
+  placeholder = 'Search clients, tags, county',
+  value,
+}: {
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  value: string;
+}) {
+  return (
+    <label className="flex min-h-11 w-full items-center gap-2 rounded-md border border-[#dedbd4] bg-[#fbfaf8] px-3">
+      <Search className="h-4 w-4 flex-none text-[#817b72]" strokeWidth={1.7} />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        className="min-w-0 flex-1 bg-transparent font-body text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        placeholder={placeholder}
+      />
+    </label>
+  );
+}
+
 export function TrainerOpsStudio({
   initialBookings = [],
   initialClients = [],
@@ -486,14 +511,25 @@ export function TrainerOpsStudio({
     const query = clientSearch.trim().toLowerCase();
     if (!query) return clients;
 
-    return clients.filter((client) =>
-      [client.name, client.email, client.phone, client.status, client.goal, client.payment]
+    return clients.filter((client) => {
+      const meta = metaForClient(client, clientMeta[clientMetaKey(client)]);
+      return [
+        client.name,
+        client.email,
+        client.phone,
+        client.status,
+        client.goal,
+        client.payment,
+        meta.bodyType,
+        meta.focus,
+        meta.county,
+      ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
-        .includes(query)
-    );
-  }, [clientSearch, clients]);
+        .includes(query);
+    });
+  }, [clientMeta, clientSearch, clients]);
   const selected = useMemo(
     () => clients.find((client) => client.name === selectedClient) ?? clients[0] ?? emptyClient,
     [clients, selectedClient]
@@ -762,6 +798,12 @@ export function TrainerOpsStudio({
     } else if (params.get('tab') === 'clients') {
       setTab('clients');
     }
+
+    const linkedClient = params.get('client')?.trim();
+    if (linkedClient) {
+      setSelectedClient(linkedClient);
+      setClientRailOpen(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -817,6 +859,11 @@ export function TrainerOpsStudio({
       onThemeChange={setTheme}
       theme={theme}
       title={adminTabLabels[tab]}
+      headerControl={
+        tab === 'clients' ? (
+          <ClientSearchField disabled={clients.length === 0} value={clientSearch} onChange={setClientSearch} />
+        ) : null
+      }
       actions={
         <>
           <AddClientHeaderAction
@@ -1053,6 +1100,10 @@ export function TrainerOpsStudio({
                   key="meals"
                   selectedClient={selected.name}
                   onAdminPlanSnapshot={setMealPlanSnapshot}
+                  onOpenClientProfile={() => {
+                    selectTab('clients');
+                    setClientRailOpen(true);
+                  }}
                   onPlanChange={markPostPending}
                 />
               ) : null}
@@ -1062,6 +1113,7 @@ export function TrainerOpsStudio({
                   clients={clients}
                   clientMeta={clientMeta}
                   clientNotice={clientNotice}
+                  query={clientSearch}
                   selectedClientName={selectedClient}
                   onSelectClient={(name) => {
                     setSelectedClient(name);
@@ -1090,15 +1142,16 @@ function ClientsPanel({
   clientMeta,
   clientNotice,
   onSelectClient,
+  query,
   selectedClientName,
 }: {
   clients: AdminClientSummary[];
   clientMeta: Record<string, ClientProfileMeta>;
   clientNotice: string | null;
   onSelectClient: (name: string) => void;
+  query: string;
   selectedClientName: string;
 }) {
-  const [query, setQuery] = useState('');
   const crmClients = useMemo(() => (clients.length > 0 ? clients : [emptyClient]), [clients]);
   const visibleClients = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -1122,19 +1175,7 @@ function ClientsPanel({
       className="space-y-4"
     >
       <section className="min-w-0">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <label className="flex min-h-11 min-w-[min(22rem,100%)] items-center gap-2 rounded-md border border-[#dedbd4] bg-[#fbfaf8] px-3">
-            <Search className="h-4 w-4 text-[#817b72]" strokeWidth={1.7} />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="min-w-0 flex-1 bg-transparent font-body text-sm outline-none"
-              placeholder="Search clients, tags, county"
-            />
-          </label>
-        </div>
-
-        <div className="mt-4 overflow-hidden">
+        <div className="overflow-hidden">
           <div className="grid grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr_80px] gap-3 px-0 py-3 font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
             <span>Client</span>
             <span>Body</span>
@@ -1188,14 +1229,17 @@ function ClientsPanel({
 function MealsPanel({
   selectedClient,
   onAdminPlanSnapshot,
+  onOpenClientProfile,
   onPlanChange,
 }: {
   selectedClient: string;
   onAdminPlanSnapshot: (snapshot: MealPrepPlanSnapshot) => void;
+  onOpenClientProfile: () => void;
   onPlanChange: () => void;
 }) {
   const target = defaultNutritionTarget;
   const [checklistOpen, setChecklistOpen] = useState(false);
+  const clientProfileHref = `/admin/pulse?tab=clients&client=${encodeURIComponent(selectedClient)}`;
 
   return (
     <motion.section
@@ -1207,23 +1251,23 @@ function MealsPanel({
     >
       <section className="min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">
-              Nutrition command
-            </p>
-            <h2 className="mt-1 font-section text-4xl leading-none">Meal plan for {selectedClient}</h2>
-            <p className="mt-2 max-w-xl font-body text-sm leading-relaxed text-[#66615a]">{target.note}</p>
-          </div>
+          <h2 className="font-section text-4xl leading-none">Meal plan for {selectedClient}</h2>
           <div className="admin-fade-tabs grid grid-cols-3">
             {[
               ['Calories', target.calories],
               ['Protein', target.protein],
               ['Adherence', target.compliance],
             ].map(([label, value]) => (
-              <div key={label} className="min-w-20 px-3 py-2 text-right">
+              <a
+                key={label}
+                href={clientProfileHref}
+                onClick={onOpenClientProfile}
+                className="admin-liquid-button min-w-20 px-3 py-2 text-right transition hover:text-[#f24f09] active:scale-[0.98]"
+                aria-label={`Open ${selectedClient} profile to update ${label.toLowerCase()}`}
+              >
                 <p className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">{label}</p>
                 <p className="mt-1 font-headline text-base uppercase text-[#151515]">{value}</p>
-              </div>
+              </a>
             ))}
           </div>
         </div>

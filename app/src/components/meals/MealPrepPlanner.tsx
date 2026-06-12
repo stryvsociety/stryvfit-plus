@@ -368,6 +368,7 @@ export function MealPrepPlanner({
           description={`Workout focus: ${workoutFocus}. Review Ideal Nutrition selections and prepare the StryvFit+ client plan.`}
           durationMinutes={30}
           context={pulseContext}
+          tone="light"
         />
       ) : null}
 

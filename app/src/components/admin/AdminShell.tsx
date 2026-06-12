@@ -41,6 +41,7 @@ type AdminShellProps = {
   actions?: ReactNode;
   breadcrumbs: Breadcrumb[];
   children: ReactNode;
+  headerControl?: ReactNode;
   onAppointments?: () => void;
   onClients?: () => void;
   onMeals?: () => void;
@@ -67,6 +68,7 @@ export function AdminShell({
   actions,
   breadcrumbs,
   children,
+  headerControl,
   onAppointments,
   onClients,
   onMeals,
@@ -216,12 +218,17 @@ export function AdminShell({
               </div>
 
               <div className="mt-3 flex flex-wrap items-start justify-between gap-4 lg:mt-0">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <AdminHistoryControls />
                     <AdminBreadcrumbs breadcrumbs={breadcrumbs} />
                   </div>
-                  <h1 className="mt-3 font-section text-4xl leading-none tracking-normal">{title}</h1>
+                  <div className="mt-3 flex flex-wrap items-end gap-4">
+                    <h1 className="font-section text-4xl leading-none tracking-normal">{title}</h1>
+                    {headerControl ? (
+                      <div className="w-full max-w-[26rem] sm:w-[22rem] lg:w-[26rem] lg:pb-1">{headerControl}</div>
+                    ) : null}
+                  </div>
                 </div>
                 {actions ? <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div> : null}
               </div>

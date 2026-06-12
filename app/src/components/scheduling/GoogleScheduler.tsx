@@ -143,6 +143,7 @@ export function GoogleScheduler({
   location = 'Stryv Society Fitness',
   context,
   serviceType = 'free',
+  tone = 'dark',
   variant = 'card',
   onBookSession,
   manageAvailability = false,
@@ -153,6 +154,7 @@ export function GoogleScheduler({
   location?: string;
   context?: string;
   serviceType?: BookingServiceType;
+  tone?: 'dark' | 'light';
   variant?: 'card' | 'timeline';
   onBookSession?: (draft: SchedulerBookingDraft) => Promise<void> | void;
   manageAvailability?: boolean;
@@ -180,6 +182,7 @@ export function GoogleScheduler({
   const bookingCtaLabel = serviceType === 'free' ? 'Claim Free Session' : 'Book Session';
   const requiresConsent = bookingRequiresConsent(serviceType);
   const requiresMobile = Boolean(onBookSession && !manageAvailability);
+  const isLightTone = tone === 'light';
   const normalizedClientPhone = normalizeMobileNumber(clientPhone);
   const blockedTimes = useMemo(
     () => availability.blockedSlots[selectedDateKey] ?? [],
@@ -598,40 +601,76 @@ export function GoogleScheduler({
   }
 
   return (
-    <section className="bg-transparent p-0">
+    <section
+      className={
+        isLightTone
+          ? 'rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-4 text-[#151515]'
+          : 'bg-transparent p-0'
+      }
+    >
       <div className="flex items-start justify-between gap-4">
         <div>
-            <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">
+          <p
+            className={`font-caption text-[10px] uppercase tracking-[0.16em] ${
+              isLightTone ? 'text-[#f24f09]' : 'text-gold'
+            }`}
+          >
             Schedule
           </p>
-          <h2 className="mt-2 font-section text-3xl leading-none tracking-normal text-text">Choose a block</h2>
+          <h2
+            className={`mt-2 font-section text-3xl leading-none tracking-normal ${
+              isLightTone ? 'text-[#151515]' : 'text-text'
+            }`}
+          >
+            Choose a block
+          </h2>
         </div>
-        <label className="p-1 text-right">
-          <p className="font-caption text-[9px] uppercase tracking-[0.14em] text-text-dim">
+        <label className="min-w-24 text-right">
+          <p
+            className={`font-caption text-[9px] uppercase tracking-[0.14em] ${
+              isLightTone ? 'text-[#817b72]' : 'text-text-dim'
+            }`}
+          >
             Duration
           </p>
-          <select
-            value={selectedDuration}
-            onChange={(event) => setSelectedDuration(Number(event.target.value))}
-            className="mt-1 bg-transparent font-headline text-lg text-text outline-none"
-          >
-            {durationOptions.map((minutes) => (
-              <option key={minutes} value={minutes}>
-                {minutes}m
-              </option>
-            ))}
-          </select>
+          <span className="relative mt-1 block">
+            <select
+              value={selectedDuration}
+              onChange={(event) => setSelectedDuration(Number(event.target.value))}
+              className={`min-h-10 w-full appearance-none rounded-full border py-0 pl-3 pr-9 font-headline text-lg outline-none transition focus:border-[#f24f09] ${
+                isLightTone
+                  ? 'border-[#dedbd4] bg-white text-[#151515]'
+                  : 'border-border bg-bg/70 text-text'
+              }`}
+            >
+              {durationOptions.map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {minutes}m
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 ${
+                isLightTone ? 'text-[#817b72]' : 'text-text-dim'
+              }`}
+              strokeWidth={1.8}
+            />
+          </span>
         </label>
       </div>
 
       <div className="mt-6">
-        <div className="mb-4 flex items-center justify-between gap-3 py-2 text-text-muted sm:mb-3 sm:py-0">
+        <div
+          className={`mb-4 flex items-center justify-between gap-3 py-2 sm:mb-3 sm:py-0 ${
+            isLightTone ? 'text-[#817b72]' : 'text-text-muted'
+          }`}
+        >
           <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-gold" strokeWidth={1.7} />
+            <CalendarDays className={`h-4 w-4 ${isLightTone ? 'text-[#f24f09]' : 'text-gold'}`} strokeWidth={1.7} />
             <div>
               <p className="font-caption text-[10px] uppercase tracking-[0.16em]">Choose date</p>
-              <p className="mt-1 font-body text-xs text-text-muted">
-                <span className="font-semibold text-text">{cycle.label}</span>
+              <p className={`mt-1 font-body text-xs ${isLightTone ? 'text-[#66615a]' : 'text-text-muted'}`}>
+                <span className={`font-semibold ${isLightTone ? 'text-[#151515]' : 'text-text'}`}>{cycle.label}</span>
               </p>
             </div>
           </div>
@@ -641,7 +680,9 @@ export function GoogleScheduler({
               onClick={() => goToCycle(cycleIndex - 1)}
               disabled={cycleIndex === 0}
               aria-label="Previous calendar cycle"
-              className="ios-pill flex h-9 w-9 items-center justify-center rounded-full border border-border bg-bg/70 text-text disabled:cursor-not-allowed disabled:opacity-35"
+              className={`ios-pill flex h-9 w-9 items-center justify-center rounded-full border disabled:cursor-not-allowed disabled:opacity-35 ${
+                isLightTone ? 'border-[#dedbd4] bg-white text-[#151515]' : 'border-border bg-bg/70 text-text'
+              }`}
             >
               <ChevronLeft className="h-4 w-4" strokeWidth={1.8} />
             </button>
@@ -649,7 +690,9 @@ export function GoogleScheduler({
               type="button"
               onClick={() => goToCycle(cycleIndex + 1)}
               aria-label="Next calendar cycle"
-              className="ios-pill flex h-9 w-9 items-center justify-center rounded-full border border-gold/40 bg-bg/70 text-gold"
+              className={`ios-pill flex h-9 w-9 items-center justify-center rounded-full border ${
+                isLightTone ? 'border-[#f24f09]/40 bg-white text-[#f24f09]' : 'border-gold/40 bg-bg/70 text-gold'
+              }`}
             >
               <ChevronRight className="h-4 w-4" strokeWidth={1.8} />
             </button>
@@ -668,14 +711,24 @@ export function GoogleScheduler({
                 disabled={isPast}
                 className={`relative min-h-[74px] overflow-hidden rounded-md border px-2 py-3 text-left transition-all duration-300 ${
                   isSelected
-                    ? 'border-gold bg-[radial-gradient(circle_at_50%_14%,rgba(242,79,9,0.34),rgba(242,79,9,0.10)_48%,rgba(255,255,255,0)_72%)] text-gold shadow-[0_0_0_1px_rgba(242,79,9,0.26),0_0_24px_rgba(242,79,9,0.34),inset_0_1px_0_rgba(255,255,255,0.14)]'
+                    ? isLightTone
+                      ? 'border-[#f24f09] bg-[radial-gradient(circle_at_50%_14%,rgba(242,79,9,0.18),rgba(255,250,246,0)_68%),#fffaf6] text-[#f24f09] shadow-[0_0_0_1px_rgba(242,79,9,0.18),0_10px_28px_rgba(242,79,9,0.16)]'
+                      : 'border-gold bg-[radial-gradient(circle_at_50%_14%,rgba(242,79,9,0.34),rgba(242,79,9,0.10)_48%,rgba(255,255,255,0)_72%)] text-gold shadow-[0_0_0_1px_rgba(242,79,9,0.26),0_0_24px_rgba(242,79,9,0.34),inset_0_1px_0_rgba(255,255,255,0.14)]'
                     : isPast
-                      ? 'border-border bg-bg/40 text-text-dim opacity-45'
-                      : 'border-border bg-bg/70 text-text shadow-[0_8px_22px_rgba(0,0,0,0.04)] hover:border-gold/50 hover:shadow-[0_0_0_1px_rgba(242,79,9,0.12),0_0_18px_rgba(242,79,9,0.16)]'
+                      ? isLightTone
+                        ? 'border-[#dedbd4] bg-[#eeeae4] text-[#aaa39a] opacity-45'
+                        : 'border-border bg-bg/40 text-text-dim opacity-45'
+                      : isLightTone
+                        ? 'border-[#dedbd4] bg-white text-[#151515] shadow-[0_8px_22px_rgba(21,21,21,0.04)] hover:border-[#f24f09]/55 hover:text-[#f24f09] hover:shadow-[0_0_18px_rgba(242,79,9,0.14)]'
+                        : 'border-border bg-bg/70 text-text shadow-[0_8px_22px_rgba(0,0,0,0.04)] hover:border-gold/50 hover:shadow-[0_0_0_1px_rgba(242,79,9,0.12),0_0_18px_rgba(242,79,9,0.16)]'
                 }`}
               >
                 {isSelected ? (
-                  <span className="pointer-events-none absolute -right-5 -top-5 h-14 w-14 rounded-full bg-gold/25 blur-xl" />
+                  <span
+                    className={`pointer-events-none absolute -right-5 -top-5 h-14 w-14 rounded-full blur-xl ${
+                      isLightTone ? 'bg-[#f24f09]/18' : 'bg-gold/25'
+                    }`}
+                  />
                 ) : null}
                 <span className="block font-caption text-[9px] uppercase tracking-[0.13em] opacity-70">
                   {label.weekday}
@@ -688,8 +741,8 @@ export function GoogleScheduler({
       </div>
 
       <div className="mt-5">
-        <div className="mb-2 flex items-center gap-2 text-text-muted">
-          <Clock className="h-4 w-4 text-gold" strokeWidth={1.7} />
+        <div className={`mb-2 flex items-center gap-2 ${isLightTone ? 'text-[#817b72]' : 'text-text-muted'}`}>
+          <Clock className={`h-4 w-4 ${isLightTone ? 'text-[#f24f09]' : 'text-gold'}`} strokeWidth={1.7} />
           <p className="font-caption text-[10px] uppercase tracking-[0.16em]">Choose time</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -704,10 +757,16 @@ export function GoogleScheduler({
                 disabled={isBlocked}
                 className={`min-h-11 rounded-full border px-3 font-caption text-[10px] uppercase tracking-[0.14em] transition-all duration-300 ${
                   isSelected
-                    ? 'border-gold bg-[radial-gradient(circle_at_50%_0%,rgba(242,79,9,0.34),rgba(242,79,9,0.10)_58%,rgba(255,255,255,0)_82%)] text-gold shadow-[0_0_0_1px_rgba(242,79,9,0.24),0_0_20px_rgba(242,79,9,0.3)]'
+                    ? isLightTone
+                      ? 'border-[#f24f09] bg-[#fffaf6] text-[#f24f09] shadow-[0_0_0_1px_rgba(242,79,9,0.16),0_0_18px_rgba(242,79,9,0.16)]'
+                      : 'border-gold bg-[radial-gradient(circle_at_50%_0%,rgba(242,79,9,0.34),rgba(242,79,9,0.10)_58%,rgba(255,255,255,0)_82%)] text-gold shadow-[0_0_0_1px_rgba(242,79,9,0.24),0_0_20px_rgba(242,79,9,0.3)]'
                     : isBlocked
-                      ? 'border-border bg-bg/40 text-text-dim line-through opacity-45'
-                    : 'border-border bg-bg/70 text-text-muted hover:border-gold/50 hover:text-text hover:shadow-[0_0_18px_rgba(242,79,9,0.14)]'
+                      ? isLightTone
+                        ? 'border-[#dedbd4] bg-[#eeeae4] text-[#aaa39a] line-through opacity-45'
+                        : 'border-border bg-bg/40 text-text-dim line-through opacity-45'
+                    : isLightTone
+                      ? 'border-[#dedbd4] bg-white text-[#6d675f] hover:border-[#f24f09]/55 hover:text-[#f24f09] hover:shadow-[0_0_18px_rgba(242,79,9,0.14)]'
+                      : 'border-border bg-bg/70 text-text-muted hover:border-gold/50 hover:text-text hover:shadow-[0_0_18px_rgba(242,79,9,0.14)]'
                 }`}
               >
                 {formatTime(time)}
@@ -809,7 +868,9 @@ export function GoogleScheduler({
           href={eventUrl}
           target="_blank"
           rel="noreferrer"
-          className="ios-pill mt-5 inline-flex min-h-14 w-full flex-col items-center justify-center rounded-full bg-gold px-4 text-bg transition-colors hover:bg-gold-deep"
+          className={`ios-pill mt-5 inline-flex min-h-14 w-full flex-col items-center justify-center rounded-full px-4 transition-colors ${
+            isLightTone ? 'bg-[#f24f09] text-white hover:bg-[#bf3612]' : 'bg-gold text-bg hover:bg-gold-deep'
+          }`}
         >
           <span className="inline-flex items-center gap-2 font-control text-sm font-semibold uppercase tracking-[0.08em]">
             Book Session <ExternalLink className="h-4 w-4" strokeWidth={1.7} />
