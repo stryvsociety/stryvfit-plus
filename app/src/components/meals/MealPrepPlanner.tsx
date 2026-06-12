@@ -6,7 +6,6 @@ import type { IdealNutritionMeal } from '@/types';
 import { buildPulseBrief } from '@/lib/idealNutrition';
 import { reportIncident } from '@/lib/reportIncident';
 import { GoogleScheduler, type SchedulerBookingDraft } from '@/components/scheduling/GoogleScheduler';
-import { enrichClientRequest, saveClientRequest, type ClientRequestKind } from '@/lib/clientRequests';
 
 type ApiResponse = {
   source: string;
@@ -14,9 +13,24 @@ type ApiResponse = {
   meals: IdealNutritionMeal[];
 };
 
+type ClientRequestKind = 'trainer-note' | 'meal-plan-change';
+
 const filters = ['all', 'high protein', 'lean', 'keto', 'vegan', 'performance carbs'] as const;
 const workoutFocuses = ['strength', 'hypertrophy', 'conditioning', 'recovery'] as const;
 const AFFILIATE_CODE = process.env.NEXT_PUBLIC_IDEAL_NUTRITION_AFFILIATE_CODE ?? 'STRYVTRAINER';
+
+export type MealPrepPlanSnapshot = {
+  selectedMeals: IdealNutritionMeal[];
+  totals: {
+    cost: number;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  workoutFocus: (typeof workoutFocuses)[number];
+  brief: string;
+};
 
 function money(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -31,10 +45,12 @@ function affiliateUrl(url: string): string {
 export function MealPrepPlanner({
   admin = false,
   clientName = 'StryvFit+ client',
+  onAdminPlanSnapshot,
   onPlanChange,
 }: {
   admin?: boolean;
   clientName?: string;
+  onAdminPlanSnapshot?: (snapshot: MealPrepPlanSnapshot) => void;
   onPlanChange?: () => void;
 }) {
   const [meals, setMeals] = useState<IdealNutritionMeal[]>([]);
@@ -47,6 +63,8 @@ export function MealPrepPlanner({
   const [changesOpen, setChangesOpen] = useState(false);
   const [changeRequest, setChangeRequest] = useState('');
   const [sentState, setSentState] = useState<ClientRequestKind | null>(null);
+  const [sendingRequest, setSendingRequest] = useState<ClientRequestKind | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
 
@@ -101,22 +119,43 @@ export function MealPrepPlanner({
     });
   }, [filter, meals, query]);
 
-  const totals = selectedMeals.reduce(
-    (sum, meal) => ({
-      cost: sum.cost + meal.price_cents,
-      calories: sum.calories + meal.calories,
-      protein: sum.protein + meal.protein_g,
-      carbs: sum.carbs + meal.carbs_g,
-      fat: sum.fat + meal.fat_g,
+  const totals = useMemo(
+    () =>
+      selectedMeals.reduce(
+        (sum, meal) => ({
+          cost: sum.cost + meal.price_cents,
+          calories: sum.calories + meal.calories,
+          protein: sum.protein + meal.protein_g,
+          carbs: sum.carbs + meal.carbs_g,
+          fat: sum.fat + meal.fat_g,
+        }),
+        { cost: 0, calories: 0, protein: 0, carbs: 0, fat: 0 }
+      ),
+    [selectedMeals]
+  );
+  const pulseContext = useMemo(
+    () =>
+      buildPulseBrief(
+        selectedMeals,
+        admin
+          ? `Trainer-selected ${workoutFocus} workout and nutrition plan for StryvFit+ client planning.`
+          : 'Trainer-recommended Ideal Nutrition meals for a weekly StryvFit+ plan.'
+      ),
+    [admin, selectedMeals, workoutFocus]
+  );
+  const adminPlanSnapshot = useMemo<MealPrepPlanSnapshot>(
+    () => ({
+      selectedMeals,
+      totals,
+      workoutFocus,
+      brief: pulseContext,
     }),
-    { cost: 0, calories: 0, protein: 0, carbs: 0, fat: 0 }
+    [pulseContext, selectedMeals, totals, workoutFocus]
   );
-  const pulseContext = buildPulseBrief(
-    selectedMeals,
-    admin
-      ? `Trainer-selected ${workoutFocus} workout and nutrition plan for StryvFit+ client planning.`
-      : 'Trainer-recommended Ideal Nutrition meals for a weekly StryvFit+ plan.'
-  );
+
+  useEffect(() => {
+    if (admin) onAdminPlanSnapshot?.(adminPlanSnapshot);
+  }, [admin, adminPlanSnapshot, onAdminPlanSnapshot]);
 
   function toggleMeal(id: string) {
     onPlanChange?.();
@@ -129,31 +168,52 @@ export function MealPrepPlanner({
     await navigator.clipboard.writeText(pulseContext);
   }
 
-  function publishClientRequest(kind: ClientRequestKind, message: string) {
+  async function publishClientRequest(kind: ClientRequestKind, message: string) {
     const cleanMessage = message.trim();
     if (!cleanMessage) return;
 
-    saveClientRequest({
-      kind,
-      clientName,
-      message: cleanMessage,
-      meals: selectedMeals.map((meal) => ({
-        id: meal.id,
-        name: meal.name,
-        protein_g: meal.protein_g,
-        calories: meal.calories,
-        product_url: affiliateUrl(meal.product_url),
-      })),
-      suggestedActions: enrichClientRequest(kind, cleanMessage, selectedMeals),
-    });
+    setSendingRequest(kind);
+    setRequestError(null);
+    try {
+      const response = await fetch('/api/client/requests', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind,
+          clientName,
+          message: cleanMessage,
+          meals: selectedMeals.map((meal) => ({
+            id: meal.id,
+            name: meal.name,
+            protein_g: meal.protein_g,
+            calories: meal.calories,
+            product_url: affiliateUrl(meal.product_url),
+          })),
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? 'Unable to send request');
 
-    setSentState(kind);
-    if (kind === 'trainer-note') setTrainerNote('');
-    if (kind === 'meal-plan-change') {
-      setChangeRequest('');
-      setChangesOpen(false);
+      setSentState(kind);
+      if (kind === 'trainer-note') setTrainerNote('');
+      if (kind === 'meal-plan-change') {
+        setChangeRequest('');
+        setChangesOpen(false);
+      }
+      window.setTimeout(() => setSentState(null), 2200);
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : 'Unable to send request';
+      setRequestError(messageText);
+      void reportIncident({
+        source: 'browserbase',
+        severity: 'medium',
+        message: messageText,
+        context: { kind, clientName },
+        admin_action: 'Client request failed from MealPrepPlanner.',
+      });
+    } finally {
+      setSendingRequest(null);
     }
-    window.setTimeout(() => setSentState(null), 2200);
   }
 
   async function createMealPrepBooking(draft: SchedulerBookingDraft) {
@@ -450,15 +510,16 @@ export function MealPrepPlanner({
           />
           <button
             type="button"
-            onClick={() => publishClientRequest('trainer-note', trainerNote)}
-            disabled={!trainerNote.trim()}
+            onClick={() => void publishClientRequest('trainer-note', trainerNote)}
+            disabled={!trainerNote.trim() || sendingRequest === 'trainer-note'}
             className="ios-pill mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-gold px-4 font-control text-sm font-semibold uppercase tracking-[0.08em] text-bg transition hover:bg-gold-deep disabled:cursor-not-allowed disabled:opacity-45"
           >
-            Send note
+            {sendingRequest === 'trainer-note' ? 'Sending' : 'Send note'}
           </button>
           {sentState === 'trainer-note' ? (
             <p className="mt-2 font-body text-xs text-gold">Sent to your trainer with suggested next steps.</p>
           ) : null}
+          {requestError ? <p className="mt-2 font-body text-xs text-gold">{requestError}</p> : null}
         </section>
       )}
 
@@ -490,12 +551,13 @@ export function MealPrepPlanner({
             />
             <button
               type="button"
-              onClick={() => publishClientRequest('meal-plan-change', changeRequest)}
-              disabled={!changeRequest.trim()}
+              onClick={() => void publishClientRequest('meal-plan-change', changeRequest)}
+              disabled={!changeRequest.trim() || sendingRequest === 'meal-plan-change'}
               className="ios-pill mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-gold px-4 font-control text-sm font-semibold uppercase tracking-[0.08em] text-bg transition hover:bg-gold-deep disabled:cursor-not-allowed disabled:opacity-45"
             >
-              Send change request
+              {sendingRequest === 'meal-plan-change' ? 'Sending' : 'Send change request'}
             </button>
+            {requestError ? <p className="mt-2 font-body text-xs text-gold">{requestError}</p> : null}
           </section>
         </div>
       ) : null}

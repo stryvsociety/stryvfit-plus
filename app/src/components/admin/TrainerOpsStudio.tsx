@@ -27,12 +27,11 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GoogleScheduler } from '@/components/scheduling/GoogleScheduler';
-import { MealPrepPlanner } from '@/components/meals/MealPrepPlanner';
+import { MealPrepPlanner, type MealPrepPlanSnapshot } from '@/components/meals/MealPrepPlanner';
 import { SystemHealthPanel } from '@/components/incidents/SystemHealthPanel';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { FloatingPostToClientButton } from '@/components/admin/FloatingPostToClientButton';
 import { usePersistedTheme } from '@/components/ui/ThemeToggle';
-import { readClientRequests, type ClientRequest } from '@/lib/clientRequests';
 import type { AdminBookingSummary, AdminClientSummary, BookingStatus } from '@/lib/bookings';
 import { BOOKING_SERVICES } from '@/lib/bookingServices';
 import { combineBookingTzDateAndTime } from '@/lib/bookingAvailability';
@@ -72,6 +71,22 @@ type ClientProfileMeta = {
   height: string;
   zip: string;
 };
+
+type AdminClientRequest = {
+  id: string;
+  clientEmail: string | null;
+  clientName: string | null;
+  kind: 'trainer-note' | 'meal-plan-change';
+  message: string;
+  status: 'new' | 'reviewed' | 'archived';
+  createdAt: string;
+};
+
+type ApiErrorResponse = {
+  error?: string;
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 
 const emptyClientDraft: ClientDraft = {
   fullName: '',
@@ -188,6 +203,49 @@ function clientNeedsAttention(client: AdminClientSummary): boolean {
     goal.includes('profile') ||
     payment.includes('no billing')
   );
+}
+
+function clientPostTarget(client: AdminClientSummary) {
+  return {
+    clientId: UUID_RE.test(client.id) ? client.id : null,
+    clientEmail: client.email,
+    clientName: client.name,
+  };
+}
+
+function clientCanReceivePost(client: AdminClientSummary): boolean {
+  return client.id !== emptyClient.id && (Boolean(client.email) || UUID_RE.test(client.id));
+}
+
+function normalizedIdentity(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function requestMatchesClient(request: AdminClientRequest, client: AdminClientSummary): boolean {
+  const clientEmail = normalizedIdentity(client.email);
+  if (clientEmail && normalizedIdentity(request.clientEmail) === clientEmail) return true;
+  return normalizedIdentity(request.clientName) === normalizedIdentity(client.name);
+}
+
+function bookingMatchesClient(booking: AdminBookingSummary, client: AdminClientSummary): boolean {
+  const clientEmail = normalizedIdentity(client.email);
+  if (clientEmail && normalizedIdentity(booking.clientEmail) === clientEmail) return true;
+  return normalizedIdentity(clientNameFromBooking(booking)) === normalizedIdentity(client.name);
+}
+
+function pickPublishBooking(bookings: AdminBookingSummary[], client: AdminClientSummary): AdminBookingSummary | null {
+  const now = Date.now();
+  const activeBookings = bookings.filter((booking) => booking.status !== 'cancelled' && booking.status !== 'expired');
+  const matching = activeBookings.filter((booking) => bookingMatchesClient(booking, client));
+  const futureMatching = matching.find((booking) => new Date(booking.startsAt).getTime() >= now);
+  if (futureMatching) return futureMatching;
+  if (matching[0]) return matching[0];
+  return activeBookings.find((booking) => new Date(booking.startsAt).getTime() >= now) ?? activeBookings[0] ?? null;
+}
+
+async function readApiError(response: Response, fallback: string): Promise<string> {
+  const payload = (await response.json().catch(() => null)) as ApiErrorResponse | null;
+  return payload?.error ?? fallback;
 }
 
 function ClientQueueChip({
@@ -398,6 +456,9 @@ export function TrainerOpsStudio({
   const [cancelNotice, setCancelNotice] = useState<string | null>(null);
   const [postPending, setPostPending] = useState(false);
   const [posted, setPosted] = useState(false);
+  const [postBusy, setPostBusy] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+  const [postNotice, setPostNotice] = useState<string | null>(null);
   const [theme, setTheme] = usePersistedTheme('stryvadmin-theme', 'light');
   const [clientSearch, setClientSearch] = useState('');
   const [clientRailOpen, setClientRailOpen] = useState(false);
@@ -410,6 +471,7 @@ export function TrainerOpsStudio({
   const [addingClient, setAddingClient] = useState(false);
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
   const [clientNotice, setClientNotice] = useState<string | null>(null);
+  const [mealPlanSnapshot, setMealPlanSnapshot] = useState<MealPrepPlanSnapshot | null>(null);
   const baseClients = useMemo(
     () =>
       upsertClientSummary(
@@ -454,12 +516,127 @@ export function TrainerOpsStudio({
   function markPostPending() {
     setPostPending(true);
     setPosted(false);
+    setPostError(null);
+    setPostNotice(null);
   }
 
-  function publishPlan() {
-    setPostPending(false);
-    setPosted(true);
-    window.setTimeout(() => setPosted(false), 1800);
+  async function publishPlan() {
+    if (postBusy) return;
+    if (!clientCanReceivePost(selected)) {
+      setPostPending(true);
+      setPostError('Choose a saved client profile or a client with an email before posting.');
+      return;
+    }
+
+    const target = clientPostTarget(selected);
+    let endpoint = '/api/admin/client-notes';
+    let successLabel = `Posted client update to ${selected.name}.`;
+    let body: Record<string, unknown>;
+
+    if (tab === 'meals') {
+      if (!mealPlanSnapshot || mealPlanSnapshot.selectedMeals.length === 0) {
+        setPostPending(true);
+        setPostError('Choose at least one meal before posting this plan.');
+        return;
+      }
+
+      endpoint = '/api/admin/meal-plans';
+      successLabel = `Posted meal plan to ${selected.name}.`;
+      body = {
+        ...target,
+        title: `Meal plan for ${selected.name}`,
+        summary: `${mealPlanSnapshot.selectedMeals.length} Ideal Nutrition meals for ${mealPlanSnapshot.workoutFocus}.`,
+        workoutFocus: mealPlanSnapshot.workoutFocus,
+        meals: mealPlanSnapshot.selectedMeals.map((meal) => ({
+          id: meal.id,
+          name: meal.name,
+          subtitle: meal.subtitle,
+          price_cents: meal.price_cents,
+          calories: meal.calories,
+          protein_g: meal.protein_g,
+          carbs_g: meal.carbs_g,
+          fat_g: meal.fat_g,
+          product_url: meal.product_url,
+          image_url: meal.image_url,
+          tags: meal.tags,
+        })),
+        totals: {
+          costCents: mealPlanSnapshot.totals.cost,
+          calories: mealPlanSnapshot.totals.calories,
+          proteinG: mealPlanSnapshot.totals.protein,
+          carbsG: mealPlanSnapshot.totals.carbs,
+          fatG: mealPlanSnapshot.totals.fat,
+        },
+        brief: mealPlanSnapshot.brief,
+        publish: true,
+      };
+    } else if (tab === 'appointments') {
+      const booking = pickPublishBooking(bookings, selected);
+      endpoint = '/api/admin/appointment-plans';
+      successLabel = `Posted appointment plan to ${selected.name}.`;
+      body = {
+        ...target,
+        bookingId: booking?.id,
+        appointmentRef: booking?.id,
+        title: booking ? `${booking.serviceLabel} appointment plan` : `Appointment plan for ${selected.name}`,
+        summary: booking
+          ? `${booking.serviceLabel} on ${formatBookingDate(booking.startsAt)} at ${formatBookingTime(booking.startsAt)}.`
+          : `Trainer-managed appointment plan for ${selected.name}.`,
+        scheduledAt: booking?.startsAt,
+        durationMinutes: booking?.durationMinutes ?? 60,
+        location: booking?.source === 'google_calendar' ? 'Google Calendar' : 'StryvFit session',
+        preparation: prepChecklist.map((item) => ({
+          label: item.label,
+          detail: item.status,
+          completed: item.status === 'Live' || item.status === 'Ready',
+        })),
+        followUp: {
+          message: `Review ${selected.name}'s next session plan after the appointment.`,
+          tasks: ['Confirm attendance', 'Update next workout block', 'Publish any meal-plan changes'],
+        },
+        publish: true,
+      };
+    } else {
+      const meta = metaForClient(selected, clientMeta[clientMetaKey(selected)]);
+      body = {
+        ...target,
+        title: 'StryvAdmin profile update',
+        body: [
+          `${selected.name} profile is ready for client review.`,
+          `Status: ${selected.status}.`,
+          `Goal: ${selected.goal}.`,
+          `Body type: ${meta.bodyType}.`,
+          `Focus: ${meta.focus}.`,
+          `County: ${meta.county}.`,
+          `Billing: ${selected.payment}.`,
+        ].join('\n'),
+        pinned: clientNeedsAttention(selected),
+        publish: true,
+      };
+    }
+
+    setPostBusy(true);
+    setPostError(null);
+    setPostNotice(null);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(await readApiError(response, 'Unable to post to client'));
+
+      setPostPending(false);
+      setPosted(true);
+      setPostNotice(successLabel);
+      window.setTimeout(() => setPosted(false), 1800);
+    } catch (error) {
+      setPostPending(true);
+      setPosted(false);
+      setPostError(error instanceof Error ? error.message : 'Unable to post to client');
+    } finally {
+      setPostBusy(false);
+    }
   }
 
   async function cancelBookingById(bookingId: string) {
@@ -775,6 +952,16 @@ export function TrainerOpsStudio({
         </AnimatePresence>
 
         <section className="grid gap-5">
+          {postNotice ? (
+            <p className="rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-3 font-body text-xs leading-relaxed text-[#6d675f]">
+              {postNotice}
+            </p>
+          ) : null}
+          {postError ? (
+            <p className="rounded-md border border-[#f24f09]/35 bg-[#fff3ec] p-3 font-body text-xs leading-relaxed text-[#d12f1b]">
+              {postError}
+            </p>
+          ) : null}
 
           <section className="min-w-0">
             <AnimatePresence mode="wait">
@@ -792,7 +979,12 @@ export function TrainerOpsStudio({
                 />
               ) : null}
               {tab === 'meals' ? (
-                <MealsPanel key="meals" selectedClient={selected.name} onPlanChange={markPostPending} />
+                <MealsPanel
+                  key="meals"
+                  selectedClient={selected.name}
+                  onAdminPlanSnapshot={setMealPlanSnapshot}
+                  onPlanChange={markPostPending}
+                />
               ) : null}
               {tab === 'clients' ? (
                 <ClientsPanel
@@ -810,7 +1002,14 @@ export function TrainerOpsStudio({
             </AnimatePresence>
           </section>
         </section>
-        <FloatingPostToClientButton posted={posted} visible={postPending || posted} onClick={publishPlan} />
+        <FloatingPostToClientButton
+          busy={postBusy}
+          disabled={!clientCanReceivePost(selected)}
+          error={postError}
+          posted={posted}
+          visible={postPending || posted || Boolean(postError)}
+          onClick={() => void publishPlan()}
+        />
       </div>
     </AdminShell>
   );
@@ -835,7 +1034,8 @@ function ClientsPanel({
   selectedClient: AdminClientSummary;
   selectedClientName: string;
 }) {
-  const [requests, setRequests] = useState<ClientRequest[]>([]);
+  const [requests, setRequests] = useState<AdminClientRequest[]>([]);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const crmClients = useMemo(() => (clients.length > 0 ? clients : [emptyClient]), [clients]);
   const visibleClients = useMemo(() => {
@@ -851,20 +1051,34 @@ function ClientsPanel({
     });
   }, [clientMeta, crmClients, query]);
   const selectedMeta = metaForClient(selectedClient, clientMeta[clientMetaKey(selectedClient)]);
-  const selectedRequests = requests.filter((request) => request.clientName === selectedClient.name);
+  const selectedRequests = requests.filter((request) => requestMatchesClient(request, selectedClient));
   const canRemoveSelected = isStoredClientProfile(selectedClient);
 
   useEffect(() => {
-    function refresh() {
-      setRequests(readClientRequests());
+    let cancelled = false;
+
+    async function refresh() {
+      setRequestsError(null);
+      try {
+        const response = await fetch('/api/admin/client-requests?limit=80&status=new');
+        const payload = (await response.json().catch(() => null)) as {
+          requests?: AdminClientRequest[];
+          error?: string;
+        } | null;
+        if (!response.ok) throw new Error(payload?.error ?? 'Unable to load client requests');
+        if (!cancelled) setRequests(payload?.requests ?? []);
+      } catch (error) {
+        if (!cancelled) setRequestsError(error instanceof Error ? error.message : 'Unable to load client requests');
+      }
     }
 
-    refresh();
-    window.addEventListener('storage', refresh);
-    window.addEventListener('stryvfit-client-request', refresh);
+    const handleFocus = () => void refresh();
+
+    void refresh();
+    window.addEventListener('focus', handleFocus);
     return () => {
-      window.removeEventListener('storage', refresh);
-      window.removeEventListener('stryvfit-client-request', refresh);
+      cancelled = true;
+      window.removeEventListener('focus', handleFocus);
     };
   }, []);
 
@@ -979,7 +1193,9 @@ function ClientsPanel({
             <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Requests</p>
           </div>
           <div className="mt-3 space-y-2">
-            {selectedRequests.length === 0 ? (
+            {requestsError ? (
+              <p className="font-body text-xs leading-relaxed text-[#d12f1b]">{requestsError}</p>
+            ) : selectedRequests.length === 0 ? (
               <p className="font-body text-xs leading-relaxed text-[#6d675f]">No open client requests for this profile.</p>
             ) : (
               selectedRequests.slice(0, 3).map((request) => (
@@ -1008,7 +1224,15 @@ function ClientsPanel({
   );
 }
 
-function MealsPanel({ selectedClient, onPlanChange }: { selectedClient: string; onPlanChange: () => void }) {
+function MealsPanel({
+  selectedClient,
+  onAdminPlanSnapshot,
+  onPlanChange,
+}: {
+  selectedClient: string;
+  onAdminPlanSnapshot: (snapshot: MealPrepPlanSnapshot) => void;
+  onPlanChange: () => void;
+}) {
   const target = defaultNutritionTarget;
   const [checklistOpen, setChecklistOpen] = useState(false);
 
@@ -1096,7 +1320,12 @@ function MealsPanel({ selectedClient, onPlanChange }: { selectedClient: string; 
 
       <section className="relative min-h-[640px] overflow-hidden rounded-md border border-[#dedbd4] bg-[#151515] p-3 text-white">
         <div className="min-h-[610px]">
-          <MealPrepPlanner admin clientName={selectedClient} onPlanChange={onPlanChange} />
+          <MealPrepPlanner
+            admin
+            clientName={selectedClient}
+            onAdminPlanSnapshot={onAdminPlanSnapshot}
+            onPlanChange={onPlanChange}
+          />
         </div>
         <button
           type="button"
