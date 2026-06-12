@@ -1,8 +1,26 @@
 import { NextResponse } from 'next/server';
 import { requireApiAdmin } from '@/lib/auth';
-import { createAdminClient, deleteAdminClient, type CreateAdminClientInput } from '@/lib/bookings';
+import { createAdminClient, deleteAdminClient, listAdminClients, type CreateAdminClientInput } from '@/lib/bookings';
 
 export const runtime = 'nodejs';
+
+export async function GET(req: Request) {
+  const admin = await requireApiAdmin();
+  if (admin instanceof NextResponse) return admin;
+
+  const url = new URL(req.url);
+  const limit = url.searchParams.get('limit') ?? undefined;
+
+  try {
+    const clients = await listAdminClients(limit);
+    return NextResponse.json({ clients });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unable to load clients' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(req: Request) {
   const admin = await requireApiAdmin();

@@ -8,6 +8,7 @@ import {
   type AdminBookingSummary,
   manualClerkUserId,
   normalizeAdminClientInput,
+  normalizeAdminClientLimit,
   normalizeClientPhoneInput,
 } from '../src/lib/bookings';
 
@@ -83,6 +84,13 @@ describe('booking utilities', () => {
 
   test('marks placeholder Clerk IDs as manual clients', () => {
     expect(manualClerkUserId('existing-client')).toBe('manual:existing-client');
+  });
+
+  test('caps admin client roster limits for API reads', () => {
+    expect(normalizeAdminClientLimit('15')).toBe(15);
+    expect(normalizeAdminClientLimit('0')).toBe(1);
+    expect(normalizeAdminClientLimit('999')).toBe(200);
+    expect(normalizeAdminClientLimit('not-a-number')).toBe(80);
   });
 
   test('can represent imported Google Calendar appointments without a local booking id', () => {

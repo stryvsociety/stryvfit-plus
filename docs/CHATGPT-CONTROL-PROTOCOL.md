@@ -40,6 +40,7 @@ On every new onboarding or support session:
 - `/api/client/appointment-plans`: authenticated client read path for published appointment plans.
 - `/api/admin/meal-plans`: backend save/publish path for Ideal Nutrition meal plans.
 - `/api/client/meal-plans`: authenticated client read path for published meal plans.
+- `/api/admin/clients`: authenticated admin roster read, manual client creation, and safe client profile removal path.
 - `/api/client/requests`: authenticated client note/meal-change request persistence.
 - `/api/admin/client-requests`: admin review/status path for client requests.
 - `/api/admin/client-notes`: admin trainer-note creation and publish path.

@@ -435,6 +435,12 @@ export function normalizeAdminClientInput(input: CreateAdminClientInput): {
   };
 }
 
+export function normalizeAdminClientLimit(value: unknown = 80): number {
+  const limit = Number(value);
+  if (!Number.isFinite(limit)) return 80;
+  return Math.min(Math.max(Math.trunc(limit), 1), 200);
+}
+
 async function reportBookingIncident(input: {
   route: string;
   message: string;
@@ -506,14 +512,15 @@ function bookingSortValue(booking: AdminBookingSummary): number {
   return Number.MAX_SAFE_INTEGER - startsAt;
 }
 
-export async function listAdminClients(limit = 80): Promise<AdminClientSummary[]> {
+export async function listAdminClients(limit: unknown = 80): Promise<AdminClientSummary[]> {
+  const cappedLimit = normalizeAdminClientLimit(limit);
   const sb = serviceClient();
   const { data, error } = await sb
     .from('app_users')
     .select(APP_USER_SELECT)
     .eq('role', 'client')
     .order('updated_at', { ascending: false })
-    .limit(limit);
+    .limit(cappedLimit);
 
   if (error) throw error;
   const profileClients = ((data ?? []) as AppUserRow[]).map(toAdminClientSummary);
@@ -523,12 +530,12 @@ export async function listAdminClients(limit = 80): Promise<AdminClientSummary[]
     .select(BOOKING_SELECT)
     .in('status', ['held', 'pending_payment', 'confirmed', 'rescheduled', 'completed', 'no_show'])
     .order('starts_at', { ascending: false })
-    .limit(Math.max(limit, 120));
+    .limit(Math.max(cappedLimit, 120));
 
   if (bookingRows.error) throw bookingRows.error;
   const bookedClients = adminClientSummariesFromBookings(((bookingRows.data ?? []) as BookingRow[]).map(toAdminBookingSummary));
 
-  return mergeAdminClientSummaries(profileClients, bookedClients).slice(0, limit);
+  return mergeAdminClientSummaries(profileClients, bookedClients).slice(0, cappedLimit);
 }
 
 async function ensureExistingClientAccessBooking(row: AppUserRow): Promise<boolean> {

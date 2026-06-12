@@ -52,6 +52,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - `/api/admin/meal-plans`: admin save/publish path for Ideal Nutrition meal plans.
 - `/api/client/meal-plans`: authenticated client read path for published meal plans.
 - `/api/client/posts`: authenticated client read path for published admin posts.
+- `/api/admin/clients`: authenticated admin roster read, manual client creation, and safe client profile removal path.
 - `/api/client/requests`: authenticated client note/meal-change request persistence.
 - `/api/admin/client-requests`: admin review/status path for client note/meal-change requests.
 - `/api/admin/client-notes`: admin trainer-note creation and publish path.
