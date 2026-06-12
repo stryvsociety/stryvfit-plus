@@ -47,6 +47,8 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - `/api/wger/exercises`: server proxy for exercise lookup from `WGER_API_BASE_URL`.
 - `/api/admin/workout-routines`: admin save/publish path for Stryv workout routines, with optional wger sync state.
 - `/api/client/workout-routines`: authenticated client read path for published workout routines.
+- `/api/admin/appointment-plans`: admin save/publish path for appointment preparation and follow-up plans.
+- `/api/client/appointment-plans`: authenticated client read path for published appointment plans.
 - `/api/admin/meal-plans`: admin save/publish path for Ideal Nutrition meal plans.
 - `/api/client/meal-plans`: authenticated client read path for published meal plans.
 - `/api/client/posts`: authenticated client read path for published admin posts.
@@ -83,6 +85,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - Subscription past-due lockout on the phase flow is not yet tied to live Stripe subscription state.
 - "Post to client" now has backend persistence at `/api/admin/publish` and authenticated client reads at `/api/client/posts`; the visible buttons remain stateful UX until a frontend wiring pass is allowed.
 - `/admin/workouts` has backend routine persistence through `/api/admin/workout-routines`; direct multi-endpoint wger sync remains dependent on a reachable wger host plus `WGER_API_TOKEN`.
+- `/admin/pulse` has backend appointment-plan persistence through `/api/admin/appointment-plans`; visible posting still needs the frontend wiring pass.
 - `/admin/pulse?tab=meals` and `/admin/nutrition` have backend meal-plan persistence through `/api/admin/meal-plans`; visible publishing still needs the frontend wiring pass.
 - Client note and meal-plan-change requests have Supabase-backed APIs; the visible meal planner still uses the legacy local browser helper until frontend wiring is allowed.
 - Trainer notes have modern Clerk/app-user-backed APIs; the `/notes` page remains visually placeholder until frontend wiring is allowed.

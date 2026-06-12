@@ -36,6 +36,8 @@ On every new onboarding or support session:
 - `/admin/settings`: trainer settings.
 - `/api/admin/workout-routines`: backend save/publish path for workout routines.
 - `/api/client/workout-routines`: authenticated client read path for published workout routines.
+- `/api/admin/appointment-plans`: backend save/publish path for appointment preparation and follow-up plans.
+- `/api/client/appointment-plans`: authenticated client read path for published appointment plans.
 - `/api/admin/meal-plans`: backend save/publish path for Ideal Nutrition meal plans.
 - `/api/client/meal-plans`: authenticated client read path for published meal plans.
 - `/api/client/requests`: authenticated client note/meal-change request persistence.

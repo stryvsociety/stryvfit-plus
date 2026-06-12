@@ -92,6 +92,7 @@ Use it to:
 - Schedule the workout block.
 - Use "Post to client" for current UX feedback; backend storage and client reads are ready, but visible delivery still needs a frontend wiring pass.
 - Saved workout routine data is available through backend APIs; direct wger mirroring needs the wger host and API token configured.
+- Saved appointment preparation and follow-up data is available through `/api/admin/appointment-plans` and `/api/client/appointment-plans` once frontend wiring is allowed.
 - Saved meal plan data is available through `/api/admin/meal-plans` and `/api/client/meal-plans` once frontend wiring is allowed.
 
 Open `/admin/settings` for trainer-facing settings:
