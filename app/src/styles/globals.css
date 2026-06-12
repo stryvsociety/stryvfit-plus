@@ -41,6 +41,8 @@
 }
 
 .admin-theme-dark .bg-white,
+.admin-theme-dark [class*="bg-[#f3f1ec]"],
+.admin-theme-dark [class*="bg-[#efede8]"],
 .admin-theme-dark [class*="bg-[#fbfaf8]"],
 .admin-theme-dark [class*="bg-[#f7f7f5]"],
 .admin-theme-dark [class*="bg-[#f5f2ed]"],

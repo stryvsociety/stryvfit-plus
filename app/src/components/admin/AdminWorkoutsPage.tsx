@@ -1,36 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Check,
-  CircleArrowUp,
   ClipboardList,
-  Dumbbell,
+  Pencil,
   PlayCircle,
-  Search,
-  Send,
-  SlidersHorizontal,
-  Sparkles,
-  Video,
 } from 'lucide-react';
-import { BrandWordmark } from '@/components/BrandWordmark';
-import { GoogleScheduler } from '@/components/scheduling/GoogleScheduler';
-import { SystemHealthPanel } from '@/components/incidents/SystemHealthPanel';
-import { AdminSectionNav } from '@/components/admin/AdminSectionNav';
-import { AdminSupportChat } from '@/components/admin/AdminSupportChat';
-import { ThemeToggle, usePersistedTheme } from '@/components/ui/ThemeToggle';
-import type { AdminClientSummary } from '@/lib/bookings';
+import { AdminShell } from '@/components/admin/AdminShell';
+import { FloatingPostToClientButton } from '@/components/admin/FloatingPostToClientButton';
+import { usePersistedTheme } from '@/components/ui/ThemeToggle';
 import type { WgerExercise } from '@/lib/wger';
-
-const emptyClient: AdminClientSummary = {
-  id: 'empty-client',
-  name: 'No clients yet',
-  email: null,
-  phone: null,
-  status: 'Waiting for signups',
-  goal: 'Client profiles will appear here',
-  payment: 'No billing yet',
-};
 
 const workoutLibrary = [
   { title: 'Lower strength A', level: 'Intermediate', blocks: 'Squat pattern, hinge accessory, carries' },
@@ -53,43 +32,29 @@ const trainingWeek = [
 ];
 
 const movementBlocks = [
-  { name: 'Warmup', detail: 'T-spine reach, 90/90 hip flow, ramp sets', icon: Sparkles },
-  { name: 'Main lift', detail: 'Back squat 5x3 @ RPE 7, 2:30 rest', icon: Dumbbell },
-  { name: 'Accessory circuit', detail: 'RDL, split squat, cable row, dead bug', icon: SlidersHorizontal },
-  { name: 'Remote video notes', detail: 'Demo angles, tempo reminder, no-equipment swap', icon: Video },
+  { name: 'Warmup', detail: 'T-spine reach, 90/90 hip flow, ramp sets' },
+  { name: 'Main lift', detail: 'Back squat 5x3 @ RPE 7, 2:30 rest' },
+  { name: 'Accessory circuit', detail: 'RDL, split squat, cable row, dead bug' },
+  { name: 'Remote video notes', detail: 'Demo angles, tempo reminder, no-equipment swap' },
 ];
 
-export function AdminWorkoutsPage({ initialClients = [] }: { initialClients?: AdminClientSummary[] }) {
-  const [selectedClient, setSelectedClient] = useState(initialClients[0]?.name ?? '');
-  const [clientSearch, setClientSearch] = useState('');
+export function AdminWorkoutsPage() {
   const [draftTitle, setDraftTitle] = useState('Lower strength A');
-  const [published, setPublished] = useState(false);
+  const [postPending, setPostPending] = useState(false);
+  const [posted, setPosted] = useState(false);
   const [theme, setTheme] = usePersistedTheme('stryvadmin-theme', 'light');
-  const isDark = theme === 'dark';
   const [exerciseSource, setExerciseSource] = useState('loading');
   const [exerciseLibrary, setExerciseLibrary] = useState<WgerExercise[]>([]);
 
-  const filteredClients = useMemo(() => {
-    const query = clientSearch.trim().toLowerCase();
-    if (!query) return initialClients;
-
-    return initialClients.filter((client) =>
-      [client.name, client.email, client.phone, client.status, client.goal, client.payment]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [clientSearch, initialClients]);
-
-  const selected = useMemo(
-    () => initialClients.find((client) => client.name === selectedClient) ?? initialClients[0] ?? emptyClient,
-    [initialClients, selectedClient]
-  );
+  function markPostPending() {
+    setPostPending(true);
+    setPosted(false);
+  }
 
   function publishPlan() {
-    setPublished(true);
-    window.setTimeout(() => setPublished(false), 1800);
+    setPostPending(false);
+    setPosted(true);
+    window.setTimeout(() => setPosted(false), 1800);
   }
 
   useEffect(() => {
@@ -118,135 +83,48 @@ export function AdminWorkoutsPage({ initialClients = [] }: { initialClients?: Ad
     };
   }, []);
 
-  useEffect(() => {
-    if (initialClients.length === 0) {
-      if (selectedClient) setSelectedClient('');
-      return;
-    }
-
-    if (!initialClients.some((client) => client.name === selectedClient)) {
-      setSelectedClient(initialClients[0].name);
-    }
-  }, [initialClients, selectedClient]);
-
   return (
-    <main className={`min-h-dvh ${isDark ? 'admin-theme-dark bg-[#070e13] text-white' : 'bg-[#f7f7f5] text-[#151515]'}`}>
-      <div className="mx-auto grid min-h-dvh max-w-7xl grid-rows-[auto_1fr] px-4 py-4 sm:px-6 lg:px-8">
-        <header className="space-y-4 border-b border-[#d9d7d1] pb-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex min-w-0 flex-wrap items-center gap-3">
-              <div className="flex-none rounded-md bg-[#151515] px-3 py-2">
-                <BrandWordmark className="w-[172px]" />
-              </div>
-              <p className="min-w-0 font-body text-sm text-[#66615a]">
-                Build workout blocks, attach coaching video notes, and schedule the plan into StryvFit+.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <ThemeToggle theme={theme} onChange={setTheme} />
-              <button
-                type="button"
-                onClick={publishPlan}
-                className="ios-pill group relative inline-flex min-h-11 items-center gap-2 overflow-hidden rounded-full border border-[#f24f09] bg-transparent px-5 font-caption text-[10px] uppercase tracking-[0.14em] text-current transition active:scale-95"
-              >
-                <span className="absolute inset-0 origin-left scale-x-0 bg-[#f24f09] transition-transform duration-300 ease-out group-hover:scale-x-100" />
-                <span className="relative z-10 inline-flex items-center gap-2 transition-colors group-hover:text-white">
-                  {published ? <Check className="h-4 w-4" /> : <CircleArrowUp className="h-4 w-4" />}
-                  {published ? 'Posted' : 'Post to client'}
-                </span>
-              </button>
-            </div>
-          </div>
-          <AdminSectionNav active="workouts" />
-        </header>
-
-        <section className="grid gap-5 py-5 lg:grid-cols-[260px_1fr_320px]">
-          <aside className="rounded-md border border-[#dedbd4] bg-white p-3">
-            <label className="flex min-h-10 items-center gap-2 rounded-md border border-[#dedbd4] px-3">
-              <Search className="h-4 w-4 text-[#817b72]" />
-              <input
-                value={clientSearch}
-                onChange={(event) => setClientSearch(event.target.value)}
-                disabled={initialClients.length === 0}
-                className="min-w-0 flex-1 bg-transparent font-body text-sm outline-none disabled:cursor-not-allowed"
-                placeholder="Search clients"
-              />
-            </label>
-            <div className="mt-4 space-y-2">
-              {filteredClients.length === 0 ? (
-                <div className="rounded-md border border-dashed border-[#dedbd4] bg-[#fbfaf8] p-4">
-                  <p className="font-body text-sm text-[#6d675f]">
-                    {initialClients.length === 0 ? 'No clients yet.' : 'No clients match that search.'}
-                  </p>
-                </div>
-              ) : (
-                filteredClients.map((client) => {
-                const active = selectedClient === client.name;
-                return (
-                  <button
-                    key={`${client.id}:${client.email ?? client.name}`}
-                    type="button"
-                    onClick={() => setSelectedClient(client.name)}
-                    className={`w-full rounded-md border p-3 text-left transition ${
-                      active ? 'border-[#f24f09] bg-[#fff3ec]' : 'border-[#e6e2da] bg-[#fbfaf8] hover:border-[#f24f09]/50'
-                    }`}
-                  >
-                    <span className="block font-headline text-base uppercase">{client.name}</span>
-                    <span className="mt-1 block font-body text-xs text-[#6d675f]">{client.goal}</span>
-                    <span className="mt-3 inline-flex rounded-sm bg-[#151515] px-2 py-1 font-caption text-[8px] uppercase tracking-[0.12em] text-white">
-                      {client.status}
-                    </span>
-                  </button>
-                );
-                })
-              )}
-            </div>
-          </aside>
-
-          <section className="min-w-0 space-y-4">
+    <AdminShell
+      active="workouts"
+      breadcrumbs={[{ label: 'Admin', href: '/admin/pulse' }, { label: 'Workouts' }]}
+      onThemeChange={setTheme}
+      theme={theme}
+      title="Workouts"
+    >
+        <section className="space-y-4">
             <section className="rounded-md border border-[#dedbd4] bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Workout routine</p>
-                  <h1 className="mt-1 font-section text-4xl leading-none">Build for {selected.name}</h1>
-                  <p className="mt-2 max-w-xl font-body text-sm leading-relaxed text-[#66615a]">
-                    Draft the session, choose a weekly slot, and publish the coaching notes into the client app.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={publishPlan}
-                  className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full bg-[#151515] px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-white"
-                >
-                  <Send className="h-4 w-4" /> Publish
-                </button>
-              </div>
-
-              <label className="mt-5 block">
+              <label className="block">
                 <span className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Plan title</span>
-                <input
-                  value={draftTitle}
-                  onChange={(event) => setDraftTitle(event.target.value)}
-                  className="mt-2 min-h-12 w-full rounded-md border border-[#dedbd4] px-3 font-body text-sm outline-none focus:border-[#f24f09]"
-                />
+                <span className="relative mt-2 block">
+                  <input
+                    value={draftTitle}
+                    onChange={(event) => {
+                      setDraftTitle(event.target.value);
+                      markPostPending();
+                    }}
+                    className="min-h-12 w-full rounded-md border border-[#dedbd4] px-3 pr-11 font-body text-sm outline-none focus:border-[#f24f09]"
+                  />
+                  <Pencil
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#817b72]"
+                    strokeWidth={1.8}
+                  />
+                </span>
               </label>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {movementBlocks.map((block) => {
-                  const Icon = block.icon;
-                  return (
-                    <article key={block.name} className="rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
-                      <div className="flex items-center justify-between gap-3">
+              <div className="mt-4 grid gap-2">
+                {movementBlocks.map((block) => (
+                    <article key={block.name} className="grid gap-3 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3 md:grid-cols-[180px_1fr] md:items-start">
+                      <div>
                         <h2 className="font-headline text-lg uppercase">{block.name}</h2>
-                        <Icon className="h-4 w-4 text-[#f24f09]" />
                       </div>
                       <textarea
-                        className="mt-3 min-h-24 w-full resize-none rounded-md border border-[#dedbd4] bg-white p-3 font-body text-sm outline-none focus:border-[#f24f09]"
+                        className="min-h-20 w-full resize-none rounded-md border border-[#dedbd4] bg-white p-3 font-body text-sm outline-none focus:border-[#f24f09]"
                         defaultValue={block.detail}
+                        onChange={markPostPending}
                       />
                     </article>
-                  );
-                })}
+                ))}
               </div>
             </section>
 
@@ -255,38 +133,19 @@ export function AdminWorkoutsPage({ initialClients = [] }: { initialClients?: Ad
                 <ClipboardList className="h-4 w-4 text-[#f24f09]" />
                 <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Training week</p>
               </div>
-              <div className="grid gap-2 md:grid-cols-5">
+              <div className="grid gap-2">
                 {trainingWeek.map((day) => (
-                  <article key={day.day} className="rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
+                  <article key={day.day} className="grid gap-3 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3 md:grid-cols-[80px_1fr_120px] md:items-center">
                     <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">{day.day}</p>
-                    <h3 className="mt-2 font-headline text-lg uppercase leading-none">{day.focus}</h3>
-                    <p className="mt-2 font-body text-xs text-[#6d675f]">{day.load}</p>
-                    <p className="mt-4 font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">{day.status}</p>
+                    <div>
+                      <h3 className="font-headline text-lg uppercase leading-none">{day.focus}</h3>
+                      <p className="mt-1 font-body text-xs text-[#6d675f]">{day.load}</p>
+                    </div>
+                    <p className="justify-self-start font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09] md:justify-self-end">{day.status}</p>
                   </article>
                 ))}
               </div>
             </section>
-          </section>
-
-          <aside className="space-y-4">
-            <section className="rounded-md border border-[#dedbd4] bg-white p-4">
-              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Next client</p>
-              <h2 className="mt-2 font-section text-3xl leading-none">{selected.name}</h2>
-              <dl className="mt-4 grid gap-2">
-                {[
-                  ['Phase', selected.status],
-                  ['Goal', selected.goal],
-                  ['Billing', selected.payment],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex items-center justify-between rounded-md bg-[#f5f2ed] px-3 py-2">
-                    <dt className="font-caption text-[9px] uppercase tracking-[0.12em] text-[#817b72]">{label}</dt>
-                    <dd className="font-body text-xs text-[#151515]">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-
-            <AdminSupportChat clientName={selected.id === 'empty-client' ? 'StryvAdmin' : selected.name} />
 
             <section className="rounded-md border border-[#dedbd4] bg-white p-4">
               <div className="mb-4 flex items-center gap-2">
@@ -303,14 +162,17 @@ export function AdminWorkoutsPage({ initialClients = [] }: { initialClients?: Ad
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setDraftTitle(item.name)}
-                    className="w-full rounded-md border border-[#e6e2da] bg-[#fff8f2] p-3 text-left transition hover:border-[#f24f09]/60"
+                    onClick={() => {
+                      setDraftTitle(item.name);
+                      markPostPending();
+                    }}
+                    className="w-full rounded-md border border-[#3a332d] bg-[#181818] p-3 text-left text-white transition hover:border-[#f24f09]/60"
                   >
                     <span className="block font-headline text-base uppercase">{item.name}</span>
-                    <span className="mt-1 block font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
+                    <span className="mt-1 block font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">
                       {item.category}
                     </span>
-                    <span className="mt-2 block font-body text-xs leading-relaxed text-[#6d675f]">
+                    <span className="mt-2 block font-body text-xs leading-relaxed text-[#d8d2c9]">
                       {[...item.muscles, ...item.equipment].slice(0, 4).join(', ') ||
                         item.description ||
                         'Exercise reference'}
@@ -321,7 +183,10 @@ export function AdminWorkoutsPage({ initialClients = [] }: { initialClients?: Ad
                   <button
                     key={item.title}
                     type="button"
-                    onClick={() => setDraftTitle(item.title)}
+                    onClick={() => {
+                      setDraftTitle(item.title);
+                      markPostPending();
+                    }}
                     className="w-full rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3 text-left transition hover:border-[#f24f09]/60"
                   >
                     <span className="block font-headline text-base uppercase">{item.title}</span>
@@ -332,22 +197,8 @@ export function AdminWorkoutsPage({ initialClients = [] }: { initialClients?: Ad
               </div>
             </section>
 
-            <div className="rounded-md border border-[#dedbd4] bg-white p-2">
-              <SystemHealthPanel compact />
-            </div>
-          </aside>
-
-          <div className="lg:col-span-3">
-            <GoogleScheduler
-              title={`${draftTitle} for ${selected.name}`}
-              description={`Workout focus: ${selected.goal}. Phase: ${selected.status}.`}
-              durationMinutes={60}
-              variant="timeline"
-              manageAvailability
-            />
-          </div>
+          <FloatingPostToClientButton posted={posted} visible={postPending || posted} onClick={publishPlan} />
         </section>
-      </div>
-    </main>
+    </AdminShell>
   );
 }

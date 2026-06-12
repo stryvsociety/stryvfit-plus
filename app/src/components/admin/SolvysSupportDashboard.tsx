@@ -12,9 +12,9 @@ import {
   Search,
   Send,
 } from 'lucide-react';
-import { BrandWordmark } from '@/components/BrandWordmark';
-import { AdminSectionNav } from '@/components/admin/AdminSectionNav';
+import { AdminShell } from '@/components/admin/AdminShell';
 import { AdminSupportChat } from '@/components/admin/AdminSupportChat';
+import { usePersistedTheme } from '@/components/ui/ThemeToggle';
 import {
   interpretIncident,
   type AppUpdateRecord,
@@ -73,7 +73,8 @@ export function SolvysSupportDashboard({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [sending, setSending] = useState<Record<string, 'sending' | 'sent' | 'failed'>>({});
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<SupportFilter>('all');
+  const [filter, setFilter] = useState<SupportFilter>('open');
+  const [theme, setTheme] = usePersistedTheme('stryvadmin-theme', 'light');
 
   const enriched = useMemo(
     () =>
@@ -143,35 +144,25 @@ export function SolvysSupportDashboard({
   }
 
   return (
-    <main className="min-h-dvh bg-[#f7f7f5] text-[#151515]">
-      <div className="mx-auto grid min-h-dvh max-w-7xl grid-rows-[auto_1fr] px-4 py-4 sm:px-6 lg:px-8">
-        <header className="space-y-4 border-b border-[#d9d7d1] pb-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-4">
-              <div className="rounded-md bg-[#151515] px-3 py-2">
-                <BrandWordmark className="w-[172px]" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#f24f09]">
-                  Solvys Support
-                </p>
-                <h1 className="mt-1 font-section text-4xl leading-none tracking-normal">
-                  Incident queue
-                </h1>
-              </div>
-            </div>
-            <a
-              href="/admin/solvys-support"
-              className="ios-pill inline-flex min-h-11 items-center gap-2 rounded-full border border-[#f24f09] px-5 font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515] transition hover:bg-[#f24f09] hover:text-white"
-            >
-              <RefreshCw className="h-4 w-4" strokeWidth={1.7} />
-              Refresh
-            </a>
-          </div>
-          <AdminSectionNav active="support" />
-        </header>
-
-        <section className="grid gap-5 py-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <AdminShell
+      active="support"
+      breadcrumbs={[{ label: 'Admin', href: '/admin/pulse' }, { label: 'Support' }]}
+      onThemeChange={setTheme}
+      theme={theme}
+      title="Support"
+      actions={
+        <>
+          <a
+            href="/admin/solvys-support"
+            className="ios-pill inline-flex min-h-11 items-center gap-2 rounded-full border border-[#f24f09] px-5 font-caption text-[10px] uppercase tracking-[0.14em] text-current transition hover:bg-[#f24f09] hover:text-white active:scale-95"
+          >
+            <RefreshCw className="h-4 w-4" strokeWidth={1.7} />
+            Refresh
+          </a>
+        </>
+      }
+    >
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section className="min-w-0 space-y-4">
             {loadError ? (
               <div className="rounded-md border border-[#f24f09]/30 bg-white p-4">
@@ -241,9 +232,13 @@ export function SolvysSupportDashboard({
               {filtered.length === 0 ? (
                 <article className="rounded-md border border-[#dedbd4] bg-white p-8 text-center">
                   <LifeBuoy className="mx-auto h-7 w-7 text-[#f24f09]" strokeWidth={1.7} />
-                  <h2 className="mt-3 font-headline text-xl uppercase">No matching issues</h2>
+                  <h2 className="mt-3 font-headline text-xl uppercase">
+                    {filter === 'open' ? 'No open issues' : 'No matching issues'}
+                  </h2>
                   <p className="mt-2 font-body text-sm text-[#66615a]">
-                    The current filter has nothing waiting.
+                    {filter === 'open'
+                      ? 'Nothing needs admin attention right now.'
+                      : 'The current filter has nothing waiting.'}
                   </p>
                 </article>
               ) : null}
@@ -389,23 +384,25 @@ export function SolvysSupportDashboard({
               <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">
                 Issue types
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <ul className="mt-3 divide-y divide-[#e6e2da] overflow-hidden rounded-md border border-[#e6e2da] bg-[#fbfaf8]">
                 {Object.entries(categoryCounts).map(([category, count]) => (
-                  <span
+                  <li
                     key={category}
-                    className="rounded-sm bg-[#f5f2ed] px-2 py-1 font-caption text-[9px] uppercase tracking-[0.12em] text-[#6d675f]"
+                    className="flex items-center justify-between gap-3 px-3 py-2"
                   >
-                    {categoryLabel(category as IncidentCategory)} {count}
-                  </span>
+                    <span className="font-caption text-[9px] uppercase tracking-[0.12em] text-[#6d675f]">
+                      {categoryLabel(category as IncidentCategory)}
+                    </span>
+                    <span className="font-headline text-base leading-none text-[#151515]">{count}</span>
+                  </li>
                 ))}
                 {Object.keys(categoryCounts).length === 0 ? (
-                  <span className="font-body text-sm text-[#66615a]">No incidents categorized.</span>
+                  <li className="px-3 py-2 font-body text-sm text-[#66615a]">No incidents categorized.</li>
                 ) : null}
-              </div>
+              </ul>
             </section>
           </aside>
         </section>
-      </div>
-    </main>
+    </AdminShell>
   );
 }

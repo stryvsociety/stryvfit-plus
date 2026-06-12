@@ -31,9 +31,11 @@ function affiliateUrl(url: string): string {
 export function MealPrepPlanner({
   admin = false,
   clientName = 'StryvFit+ client',
+  onPlanChange,
 }: {
   admin?: boolean;
   clientName?: string;
+  onPlanChange?: () => void;
 }) {
   const [meals, setMeals] = useState<IdealNutritionMeal[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -117,6 +119,7 @@ export function MealPrepPlanner({
   );
 
   function toggleMeal(id: string) {
+    onPlanChange?.();
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((mealId) => mealId !== id) : [...current, id]
     );
@@ -280,7 +283,10 @@ export function MealPrepPlanner({
               <button
                 key={item}
                 type="button"
-                onClick={() => setWorkoutFocus(item)}
+                onClick={() => {
+                  if (item !== workoutFocus) onPlanChange?.();
+                  setWorkoutFocus(item);
+                }}
                 className={`min-h-11 rounded-sm border px-3 font-caption text-[10px] uppercase tracking-[0.14em] transition-colors ${
                   workoutFocus === item
                     ? 'border-gold bg-gold text-bg'

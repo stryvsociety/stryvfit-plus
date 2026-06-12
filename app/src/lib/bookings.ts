@@ -351,6 +351,46 @@ function toAdminClientSummary(row: AppUserRow): AdminClientSummary {
   };
 }
 
+function adminClientRosterKey(client: Pick<AdminClientSummary, 'email' | 'name'>): string {
+  return (client.email?.trim().toLowerCase() || client.name.trim().toLowerCase()).replace(/\s+/g, ' ');
+}
+
+export function adminClientSummariesFromBookings(bookings: AdminBookingSummary[]): AdminClientSummary[] {
+  const byKey = new Map<string, AdminClientSummary>();
+
+  for (const booking of bookings) {
+    const name = booking.clientName?.trim() || booking.clientEmail?.trim();
+    const email = booking.clientEmail?.trim().toLowerCase() || null;
+    if (!name && !email) continue;
+
+    const client: AdminClientSummary = {
+      id: `booking:${booking.id}`,
+      name: name || email || 'Booked client',
+      email,
+      phone: booking.clientPhone,
+      status: booking.status === 'pending_payment' ? 'Payment pending' : 'Booked appointment',
+      goal: booking.serviceLabel || 'Appointment client',
+      payment: booking.status === 'pending_payment' ? 'Payment pending' : 'Booking history',
+    };
+    const key = adminClientRosterKey(client);
+    if (!byKey.has(key)) byKey.set(key, client);
+  }
+
+  return [...byKey.values()];
+}
+
+export function mergeAdminClientSummaries(
+  primaryClients: AdminClientSummary[],
+  fallbackClients: AdminClientSummary[]
+): AdminClientSummary[] {
+  const byKey = new Map(primaryClients.map((client) => [adminClientRosterKey(client), client]));
+  for (const client of fallbackClients) {
+    const key = adminClientRosterKey(client);
+    if (!byKey.has(key)) byKey.set(key, client);
+  }
+  return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function manualClerkUserId(seed = crypto.randomUUID()): string {
   return `manual:${seed}`;
 }
@@ -467,7 +507,8 @@ function bookingSortValue(booking: AdminBookingSummary): number {
 }
 
 export async function listAdminClients(limit = 80): Promise<AdminClientSummary[]> {
-  const { data, error } = await serviceClient()
+  const sb = serviceClient();
+  const { data, error } = await sb
     .from('app_users')
     .select(APP_USER_SELECT)
     .eq('role', 'client')
@@ -475,7 +516,19 @@ export async function listAdminClients(limit = 80): Promise<AdminClientSummary[]
     .limit(limit);
 
   if (error) throw error;
-  return ((data ?? []) as AppUserRow[]).map(toAdminClientSummary);
+  const profileClients = ((data ?? []) as AppUserRow[]).map(toAdminClientSummary);
+
+  const bookingRows = await sb
+    .from('bookings')
+    .select(BOOKING_SELECT)
+    .in('status', ['held', 'pending_payment', 'confirmed', 'rescheduled', 'completed', 'no_show'])
+    .order('starts_at', { ascending: false })
+    .limit(Math.max(limit, 120));
+
+  if (bookingRows.error) throw bookingRows.error;
+  const bookedClients = adminClientSummariesFromBookings(((bookingRows.data ?? []) as BookingRow[]).map(toAdminBookingSummary));
+
+  return mergeAdminClientSummaries(profileClients, bookedClients).slice(0, limit);
 }
 
 async function ensureExistingClientAccessBooking(row: AppUserRow): Promise<boolean> {

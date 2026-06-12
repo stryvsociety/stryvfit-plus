@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Ban,
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -11,9 +12,11 @@ import {
   Lock,
   Plus,
   ShieldCheck,
+  SlidersHorizontal,
   Unlock,
   X,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { combineDateAndTime, googleCalendarEventUrl } from '@/lib/googleCalendar';
 import type { BookingServiceType } from '@/lib/bookingServices';
 import { reportIncident } from '@/lib/reportIncident';
@@ -173,6 +176,7 @@ export function GoogleScheduler({
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [remoteSlots, setRemoteSlots] = useState<RemoteSlot[] | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const bookingCtaLabel = serviceType === 'free' ? 'Claim Free Session' : 'Book Session';
   const requiresConsent = bookingRequiresConsent(serviceType);
   const requiresMobile = Boolean(onBookSession && !manageAvailability);
@@ -367,20 +371,20 @@ export function GoogleScheduler({
     const selectedLabel = formatFullDate(selectedDate);
 
     return (
-      <section className="rounded-md border border-[#dedbd4] bg-white p-4">
+      <section className="relative rounded-md border border-[#dedbd4] bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#f24f09]">
               Schedule
             </p>
             <h2 className="mt-1 font-section text-4xl leading-none tracking-normal text-[#151515]">
-              Sprint timeline
+              Schedule
             </h2>
             <p className="mt-2 max-w-2xl font-body text-sm leading-relaxed text-[#66615a]">
               Map appointment blocks, client check-ins, and publishing windows before sending them to Google Calendar.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-[auto_auto]">
+          <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-[auto_auto_auto]">
             <label className="px-1 py-1 text-right">
               <p className="font-caption text-[9px] uppercase tracking-[0.14em] text-[#817b72]">Duration</p>
               <select
@@ -395,6 +399,17 @@ export function GoogleScheduler({
                 ))}
               </select>
             </label>
+            {manageAvailability ? (
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((open) => !open)}
+                aria-expanded={settingsOpen}
+                className="group relative inline-flex min-h-12 items-center justify-center gap-2 overflow-hidden rounded-md border border-[#dedbd4] bg-white px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515] transition hover:border-[#f24f09]"
+              >
+                <SlidersHorizontal className="h-4 w-4 text-[#f24f09]" strokeWidth={1.7} />
+                Settings
+              </button>
+            ) : null}
             <a
               href={eventUrl}
               target="_blank"
@@ -541,15 +556,43 @@ export function GoogleScheduler({
             </div>
           </aside>
         </div>
-        {manageAvailability ? (
-          <BookingAvailabilityControls
-            availability={availability}
-            durationMinutes={selectedDuration}
-            selectedDate={selectedDate}
-            selectedTime={selectedTime}
-            onChange={updateAvailability}
-          />
-        ) : null}
+        <AnimatePresence>
+          {manageAvailability && settingsOpen ? (
+            <motion.div
+              initial={{ opacity: 0, y: -8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="absolute right-4 top-20 z-20 max-h-[min(72vh,720px)] w-[min(42rem,calc(100vw-2rem))] overflow-y-auto rounded-md border border-[#dedbd4] bg-white p-3 shadow-[0_24px_80px_rgba(21,21,21,0.22)]"
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">
+                    Schedule settings
+                  </p>
+                  <h3 className="mt-1 font-headline text-2xl uppercase leading-none text-[#151515]">
+                    Start times and buffers
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(false)}
+                  aria-label="Close schedule settings"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#dedbd4] text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09]"
+                >
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </button>
+              </div>
+              <BookingAvailabilityControls
+                availability={availability}
+                durationMinutes={selectedDuration}
+                selectedDate={selectedDate}
+                selectedTime={selectedTime}
+                onChange={updateAvailability}
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </section>
     );
   }
@@ -833,7 +876,7 @@ function BookingAvailabilityControls({
   }
 
   return (
-    <section className="mt-4 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-4">
+    <section className="rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -878,141 +921,147 @@ function BookingAvailabilityControls({
           <span className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">
             Buffer between
           </span>
-          <select
-            value={availability.bufferMinutes}
-            onChange={(event) => onChange({ bufferMinutes: Number(event.target.value) })}
-            className="mt-2 min-h-11 w-full rounded-full border border-[#dedbd4] bg-[#fbfaf8] px-3 font-control text-sm font-semibold text-[#151515] outline-none focus:border-[#f24f09]"
-          >
-            {[0, 15, 30, 45, 60].map((minutes) => (
-              <option key={minutes} value={minutes}>
-                {minutes} min
-              </option>
-            ))}
-          </select>
+          <span className="relative mt-2 block">
+            <select
+              value={availability.bufferMinutes}
+              onChange={(event) => onChange({ bufferMinutes: Number(event.target.value) })}
+              className="min-h-11 w-full appearance-none rounded-full border border-[#dedbd4] bg-[#fbfaf8] py-0 pl-3 pr-11 font-control text-sm font-semibold text-[#151515] outline-none focus:border-[#f24f09]"
+            >
+              {[0, 15, 30, 45, 60].map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {minutes} min
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#817b72]" />
+          </span>
         </label>
       </div>
 
-      <div className="mt-4 rounded-md border border-[#dedbd4] bg-white p-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Exact starts</p>
-            <p className="mt-1 font-body text-xs text-[#66615a]">
-              Add trainer-approved starts like 6:30, 7:30, and 8:30.
-            </p>
-          </div>
-          <div className="flex w-full gap-2 sm:w-auto">
-            <input
-              type="time"
-              value={startTimeDraft}
-              onChange={(event) => setStartTimeDraft(event.target.value)}
-              className="min-h-11 min-w-0 flex-1 rounded-full border border-[#dedbd4] bg-[#fbfaf8] px-3 font-control text-sm font-semibold text-[#151515] outline-none focus:border-[#f24f09] sm:w-36 sm:flex-none"
-            />
-            <button
-              type="button"
-              onClick={addExactStart}
-              className="ios-pill inline-flex min-h-11 items-center justify-center rounded-full bg-[#151515] px-4 text-white"
-              aria-label="Add exact start time"
-            >
-              <Plus className="h-4 w-4" strokeWidth={1.8} />
-            </button>
-            <button
-              type="button"
-              onClick={addWeeklyStart}
-              className="ios-pill inline-flex min-h-11 items-center justify-center rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[9px] uppercase tracking-[0.12em] text-[#151515]"
-            >
-              Repeat {repeatDayLabel}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          {exactStarts.length === 0 ? (
-            <p className="rounded-full border border-[#dedbd4] bg-[#fbfaf8] px-3 py-2 font-body text-xs text-[#66615a]">
-              Generated range is active until an exact start is added.
-            </p>
-          ) : (
-            exactStarts.map((time) => (
-              <span
-                key={time}
-                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#f24f09]/35 bg-[#fff3ec] pl-3 pr-1 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-[#151515]"
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <section className="rounded-md border border-[#dedbd4] bg-white p-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Exact starts</p>
+              <p className="mt-1 font-body text-xs text-[#66615a]">
+                Trainer-approved starts for this calendar.
+              </p>
+            </div>
+            <div className="flex w-full gap-2 sm:w-auto">
+              <input
+                type="time"
+                value={startTimeDraft}
+                onChange={(event) => setStartTimeDraft(event.target.value)}
+                className="min-h-11 min-w-0 flex-1 rounded-full border border-[#dedbd4] bg-[#fbfaf8] px-3 font-control text-sm font-semibold text-[#151515] outline-none focus:border-[#f24f09] sm:w-36 sm:flex-none"
+              />
+              <button
+                type="button"
+                onClick={addExactStart}
+                className="ios-pill inline-flex min-h-11 items-center justify-center rounded-full bg-[#151515] px-4 text-white"
+                aria-label="Add exact start time"
               >
-                {formatTime(time)}
-                <button
-                  type="button"
-                  onClick={() => removeExactStart(time)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#817b72] transition hover:bg-white hover:text-[#151515]"
-                  aria-label={`Remove ${formatTime(time)}`}
+                <Plus className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+              <button
+                type="button"
+                onClick={addWeeklyStart}
+                className="ios-pill inline-flex min-h-11 items-center justify-center rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[9px] uppercase tracking-[0.12em] text-[#151515]"
+              >
+                Repeat {repeatDayLabel}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            {exactStarts.length === 0 ? (
+              <p className="rounded-md bg-[#fbfaf8] p-3 font-body text-xs text-[#66615a]">
+                Generated range is active until an exact start is added.
+              </p>
+            ) : (
+              exactStarts.map((time) => (
+                <div
+                  key={time}
+                  className="relative flex min-h-12 items-center justify-between gap-3 py-2 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-[linear-gradient(to_right,transparent,rgba(242,79,9,0.34),transparent)]"
                 >
-                  <X className="h-3.5 w-3.5" strokeWidth={1.8} />
-                </button>
-              </span>
-            ))
-          )}
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          {weeklyStarts.length === 0 ? (
-            <p className="rounded-full border border-[#dedbd4] bg-[#fbfaf8] px-3 py-2 font-body text-xs text-[#66615a]">
-              No repeating {repeatDayLabel} starts yet.
-            </p>
-          ) : (
-            weeklyStarts.map((time) => (
-              <span
+                  <span className="font-control text-sm font-semibold uppercase tracking-[0.08em] text-[#151515]">
+                    {formatTime(time)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeExactStart(time)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#817b72] transition hover:bg-[#fbfaf8] hover:text-[#151515]"
+                    aria-label={`Remove ${formatTime(time)}`}
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  </button>
+                </div>
+              ))
+            )}
+            {weeklyStarts.map((time) => (
+              <div
                 key={`${selectedDayKey}-${time}`}
-                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#151515]/20 bg-[#f2f0eb] pl-3 pr-1 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-[#151515]"
+                className="relative flex min-h-12 items-center justify-between gap-3 py-2 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-[linear-gradient(to_right,transparent,rgba(21,21,21,0.18),transparent)]"
               >
-                {repeatDayLabel} {formatTime(time)}
+                <span>
+                  <span className="block font-control text-sm font-semibold uppercase tracking-[0.08em] text-[#151515]">
+                    {formatTime(time)}
+                  </span>
+                  <span className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
+                    Repeats {repeatDayLabel}
+                  </span>
+                </span>
                 <button
                   type="button"
                   onClick={() => removeWeeklyStart(time)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#817b72] transition hover:bg-white hover:text-[#151515]"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#817b72] transition hover:bg-[#fbfaf8] hover:text-[#151515]"
                   aria-label={`Remove repeating ${repeatDayLabel} ${formatTime(time)}`}
                 >
                   <X className="h-3.5 w-3.5" strokeWidth={1.8} />
                 </button>
-              </span>
-            ))
-          )}
-        </div>
-      </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-      <div className="mt-4 rounded-md border border-[#dedbd4] bg-white p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">
-              Blocked on {formatFullDate(selectedDate)}
-            </p>
-            <p className="mt-1 font-body text-xs text-[#66615a]">
-              Selected time: <span className="font-semibold text-[#151515]">{formatTime(selectedTime)}</span>
+        <section className="rounded-md border border-[#dedbd4] bg-white p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">
+                Blocked on {formatFullDate(selectedDate)}
+              </p>
+              <p className="mt-1 font-body text-xs text-[#66615a]">
+                Selected time: <span className="font-semibold text-[#151515]">{formatTime(selectedTime)}</span>
+              </p>
+            </div>
+            <p className="font-caption text-[9px] uppercase tracking-[0.12em] text-[#f24f09]">
+              {blockedSlots.length} blocked
             </p>
           </div>
-          <p className="font-caption text-[9px] uppercase tracking-[0.12em] text-[#f24f09]">
-            {blockedSlots.length} blocked
-          </p>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {generatedTimes.map((time) => {
-            const blocked = blockedSlots.includes(time);
-            return (
-              <button
-                key={time}
-                type="button"
-                onClick={() => {
-                  const next = toggleBlockedSlot(availability, selectedDate, time);
-                  onChange({ blockedSlots: next.blockedSlots });
-                }}
-                className={`ios-pill inline-flex min-h-9 items-center gap-2 rounded-full px-3 font-control text-[11px] font-semibold uppercase tracking-[0.08em] ${
-                  blocked
-                    ? 'border border-[#151515] bg-[#151515] text-white'
-                    : 'border border-[#dedbd4] bg-[#fbfaf8] text-[#66615a]'
-                }`}
-              >
-                {blocked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-                {formatTime(time)}
-              </button>
-            );
-          })}
-        </div>
+          <div className="mt-3">
+            {generatedTimes.map((time) => {
+              const blocked = blockedSlots.includes(time);
+              return (
+                <button
+                  key={time}
+                  type="button"
+                  onClick={() => {
+                    const next = toggleBlockedSlot(availability, selectedDate, time);
+                    onChange({ blockedSlots: next.blockedSlots });
+                  }}
+                  className="relative flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-[linear-gradient(to_right,transparent,rgba(242,79,9,0.24),transparent)]"
+                >
+                  <span className="inline-flex items-center gap-2 font-control text-sm font-semibold uppercase tracking-[0.08em] text-[#151515]">
+                    {blocked ? <Lock className="h-3.5 w-3.5 text-[#f24f09]" /> : <Unlock className="h-3.5 w-3.5 text-[#817b72]" />}
+                    {formatTime(time)}
+                  </span>
+                  <span className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
+                    {blocked ? 'Blocked' : 'Open'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </section>
   );

@@ -1,6 +1,13 @@
-import { TrainerOpsStudio } from '@/components/admin/TrainerOpsStudio';
+import { TrainerOpsStudio, type AdminTab } from '@/components/admin/TrainerOpsStudio';
 import { requireAdminUser } from '@/lib/auth';
-import { listAdminBookings, listAdminClients, type AdminBookingSummary, type AdminClientSummary } from '@/lib/bookings';
+import {
+  adminClientSummariesFromBookings,
+  listAdminBookings,
+  listAdminClients,
+  mergeAdminClientSummaries,
+  type AdminBookingSummary,
+  type AdminClientSummary,
+} from '@/lib/bookings';
 import { captureServerIncident } from '@/lib/serverIncidents';
 
 async function reportAdminPulseLoadFailure(source: string, error: unknown) {
@@ -18,15 +25,21 @@ async function reportAdminPulseLoadFailure(source: string, error: unknown) {
   }
 }
 
-export default async function AdminPulsePage() {
+type AdminPulsePageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function AdminPulsePage({ searchParams }: AdminPulsePageProps) {
   await requireAdminUser();
+  const query = await searchParams;
   const [bookingsResult, clientsResult] = await Promise.allSettled([
     listAdminBookings(),
     listAdminClients(),
   ]);
 
   const bookings: AdminBookingSummary[] = bookingsResult.status === 'fulfilled' ? bookingsResult.value : [];
-  const clients: AdminClientSummary[] = clientsResult.status === 'fulfilled' ? clientsResult.value : [];
+  const profileClients: AdminClientSummary[] = clientsResult.status === 'fulfilled' ? clientsResult.value : [];
+  const clients = mergeAdminClientSummaries(profileClients, adminClientSummariesFromBookings(bookings));
 
   if (bookingsResult.status === 'rejected') {
     await reportAdminPulseLoadFailure('bookings', bookingsResult.reason);
@@ -35,5 +48,10 @@ export default async function AdminPulsePage() {
     await reportAdminPulseLoadFailure('clients', clientsResult.reason);
   }
 
-  return <TrainerOpsStudio initialBookings={bookings} initialClients={clients} />;
+  return <TrainerOpsStudio initialBookings={bookings} initialClients={clients} initialTab={adminTabFromQuery(query?.tab)} />;
+}
+
+function adminTabFromQuery(value: string | string[] | undefined): AdminTab {
+  const tab = Array.isArray(value) ? value[0] : value;
+  return tab === 'meals' || tab === 'clients' ? tab : 'appointments';
 }

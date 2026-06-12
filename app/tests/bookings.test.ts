@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { BOOKING_CONSENT_FORM_URL } from '../src/lib/bookingConsent';
 import { buildAvailableTimes, buildAvailableTimesForDate, parseBookingAvailability } from '../src/lib/bookingAvailability';
 import {
+  adminClientSummariesFromBookings,
   buildBookingMetadata,
+  mergeAdminClientSummaries,
   type AdminBookingSummary,
   manualClerkUserId,
   normalizeAdminClientInput,
@@ -101,5 +103,51 @@ describe('booking utilities', () => {
 
     expect(booking.id).toBe('calendar:external-event');
     expect(booking.source).toBe('google_calendar');
+  });
+
+  test('adds booked clients to the admin CRM roster once they have appointment history', () => {
+    const bookingClients = adminClientSummariesFromBookings([
+      {
+        id: 'booked-once',
+        serviceType: 'free',
+        serviceLabel: 'Free first session',
+        status: 'confirmed',
+        startsAt: '2026-06-12T13:00:00.000Z',
+        endsAt: '2026-06-12T14:00:00.000Z',
+        durationMinutes: 60,
+        clientName: 'Dangel Smith',
+        clientEmail: 'dangel@example.com',
+        clientPhone: '+13055550198',
+        googleEventId: null,
+      },
+    ]);
+
+    expect(bookingClients).toMatchObject([
+      {
+        id: 'booking:booked-once',
+        name: 'Dangel Smith',
+        email: 'dangel@example.com',
+        phone: '+13055550198',
+        status: 'Booked appointment',
+      },
+    ]);
+
+    const merged = mergeAdminClientSummaries(
+      [
+        {
+          id: 'profile-client',
+          name: 'Dangel Smith',
+          email: 'dangel@example.com',
+          phone: null,
+          status: 'Client account',
+          goal: 'Client profile',
+          payment: 'No billing yet',
+        },
+      ],
+      bookingClients
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].id).toBe('profile-client');
   });
 });
