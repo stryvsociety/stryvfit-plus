@@ -254,7 +254,7 @@ function AddClientHeaderAction({
         onClick={onToggle}
         whileHover={{ y: -1 }}
         whileTap={{ scale: 0.97 }}
-        className="ios-pill inline-flex min-h-11 items-center gap-2 rounded-full border border-[#f24f09] px-5 font-caption text-[10px] uppercase tracking-[0.14em] text-current transition hover:bg-[#f24f09] hover:text-white"
+        className="admin-liquid-button ios-pill inline-flex min-h-11 items-center gap-2 rounded-full px-5 font-caption text-[10px] uppercase tracking-[0.14em] text-current transition hover:text-[#f24f09]"
       >
         <UserPlus className="h-4 w-4" strokeWidth={1.7} />
         Add client
@@ -1008,6 +1008,7 @@ function ClientsPanel({
 
 function MealsPanel({ selectedClient, onPlanChange }: { selectedClient: string; onPlanChange: () => void }) {
   const target = defaultNutritionTarget;
+  const [checklistOpen, setChecklistOpen] = useState(false);
 
   return (
     <motion.section
@@ -1095,22 +1096,53 @@ function MealsPanel({ selectedClient, onPlanChange }: { selectedClient: string; 
         <div className="min-h-[610px]">
           <MealPrepPlanner admin clientName={selectedClient} onPlanChange={onPlanChange} />
         </div>
-        <aside className="absolute right-4 top-4 z-10 w-[min(18rem,calc(100%-2rem))] rounded-md border border-[#dedbd4] bg-white/95 p-4 text-[#151515] shadow-[0_18px_52px_rgba(0,0,0,0.24)] backdrop-blur">
-          <div className="flex items-center gap-2">
-            <ChefHat className="h-4 w-4 text-[#f24f09]" />
-            <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Prep checklist</p>
-          </div>
-          <div className="mt-4 space-y-2">
-            {prepChecklist.map((item) => (
-              <div key={item.label} className="rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
-                <p className="font-body text-sm font-semibold text-[#151515]">{item.label}</p>
-                <p className="mt-1 font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">
-                  {item.status}
-                </p>
+        <button
+          type="button"
+          aria-expanded={checklistOpen}
+          onClick={() => setChecklistOpen((open) => !open)}
+          className="admin-liquid-button admin-liquid-glass absolute right-4 top-4 z-20 inline-flex min-h-10 items-center gap-2 rounded-full px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-white"
+        >
+          <ChefHat className="h-4 w-4 text-[#f24f09]" />
+          Checklist
+        </button>
+        <AnimatePresence>
+          {checklistOpen ? (
+            <motion.aside
+              initial={{ opacity: 0, scale: 0.92, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: -8 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="admin-liquid-glass absolute right-4 top-16 z-20 w-[min(18rem,calc(100%-2rem))] rounded-md p-4 text-white"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <ChefHat className="h-4 w-4 text-[#f24f09]" />
+                  <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#d8d2c9]">
+                    Prep checklist
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close checklist"
+                  onClick={() => setChecklistOpen(false)}
+                  className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[#d8d2c9] hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-            ))}
-          </div>
-        </aside>
+              <div className="mt-4 space-y-2">
+                {prepChecklist.map((item) => (
+                  <div key={item.label} className="rounded-md border border-white/10 bg-[#0b1217]/72 p-3">
+                    <p className="font-body text-sm font-semibold text-white">{item.label}</p>
+                    <p className="mt-1 font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">
+                      {item.status}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </motion.aside>
+          ) : null}
+        </AnimatePresence>
       </section>
     </motion.section>
   );

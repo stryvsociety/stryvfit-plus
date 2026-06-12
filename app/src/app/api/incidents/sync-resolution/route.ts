@@ -46,6 +46,38 @@ export async function POST(req: Request) {
   }
 
   const incident = incidentResult.data;
+  const existingUpdate = linearIssueId
+    ? await sb
+        .from('app_update_records')
+        .select('*')
+        .eq('linear_issue_id', linearIssueId)
+        .maybeSingle()
+    : null;
+
+  if (existingUpdate?.error) {
+    return NextResponse.json({ error: existingUpdate.error.message }, { status: 500 });
+  }
+
+  if (existingUpdate?.data) {
+    if (incident?.id && incident.status !== 'resolved') {
+      await sb
+        .from('support_incidents')
+        .update({
+          status: 'resolved',
+          resolution_summary: summary,
+          resolved_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', incident.id);
+    }
+
+    return NextResponse.json({
+      update: existingUpdate.data,
+      incident_id: incident?.id ?? null,
+      deduped: true,
+    });
+  }
+
   const updateRecord = await sb
     .from('app_update_records')
     .insert({

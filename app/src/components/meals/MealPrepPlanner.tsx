@@ -244,10 +244,11 @@ export function MealPrepPlanner({
                 key={item}
                 type="button"
                 onClick={() => setFilter(item)}
-                className={`min-h-11 whitespace-nowrap rounded-sm border px-3 font-caption text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                aria-pressed={filter === item}
+                className={`admin-liquid-button min-h-11 whitespace-nowrap rounded-sm border px-3 font-caption text-[10px] uppercase tracking-[0.14em] transition-colors ${
                   filter === item
-                    ? 'border-gold bg-gold text-bg'
-                    : 'border-border bg-surface-2 text-text-muted hover:border-gold/50 hover:text-text'
+                    ? 'text-gold'
+                    : 'text-text-muted hover:text-text'
                 }`}
               >
                 {item}
@@ -287,10 +288,11 @@ export function MealPrepPlanner({
                   if (item !== workoutFocus) onPlanChange?.();
                   setWorkoutFocus(item);
                 }}
-                className={`min-h-11 rounded-sm border px-3 font-caption text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                aria-pressed={workoutFocus === item}
+                className={`admin-liquid-button min-h-11 rounded-sm border px-3 font-caption text-[10px] uppercase tracking-[0.14em] transition-colors ${
                   workoutFocus === item
-                    ? 'border-gold bg-gold text-bg'
-                    : 'border-border bg-bg/70 text-text-muted hover:border-gold/50 hover:text-text'
+                    ? 'text-gold'
+                    : 'text-text-muted hover:text-text'
                 }`}
               >
                 {item}
@@ -343,10 +345,11 @@ export function MealPrepPlanner({
                         type="button"
                         onClick={() => toggleMeal(meal.id)}
                         aria-label={selected ? `Remove ${meal.name}` : `Select ${meal.name}`}
-                        className={`flex h-8 w-8 flex-none items-center justify-center rounded-sm border transition-colors ${
+                        aria-pressed={selected}
+                        className={`admin-liquid-button flex h-8 w-8 flex-none items-center justify-center rounded-sm border transition-colors ${
                           selected
-                            ? 'border-gold bg-gold text-bg'
-                            : 'border-border text-text-muted hover:border-gold hover:text-gold'
+                            ? 'text-gold'
+                            : 'text-text-muted hover:text-gold'
                         }`}
                       >
                         {selected ? <Check className="h-4 w-4" strokeWidth={2} /> : '+'}

@@ -9,6 +9,11 @@
     "nodejs_compat",
     "global_fetch_strictly_public"
   ],
+  "triggers": {
+    "crons": [
+      "0 * * * *"
+    ]
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS",

@@ -70,7 +70,7 @@ export function AdminShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const shellClassName = isDark
     ? 'admin-theme-dark bg-[#070e13] text-white'
-    : 'bg-[#f3f1ec] text-[#151515]';
+    : 'admin-theme-light bg-[#f3f1ec] text-[#151515]';
   const desktopGridClassName = sidebarCollapsed
     ? 'lg:grid-cols-[76px_minmax(0,1fr)]'
     : 'lg:grid-cols-[248px_minmax(0,1fr)]';
@@ -127,16 +127,9 @@ export function AdminShell({
                 <ThemeToggle theme={theme} onChange={onThemeChange} className="ml-auto text-[#151515]" />
               </div>
             ) : null}
-            <p
-              className={`font-body text-xs leading-relaxed text-[#6d675f] transition-opacity duration-200 ${
-                sidebarCollapsed ? 'sr-only' : ''
-              }`}
-            >
-              Use the controls above to move across admin work without losing context.
-            </p>
             <SignOutButton
               compact={sidebarCollapsed}
-              className={`border-[#dedbd4] bg-white text-[#151515] hover:border-[#f24f09] hover:text-[#f24f09] ${
+              className={`admin-liquid-button border-transparent bg-transparent text-[#151515] hover:text-[#f24f09] ${
                 sidebarCollapsed ? 'h-11 w-full px-0' : 'w-full'
               }`}
             />
@@ -150,7 +143,7 @@ export function AdminShell({
                 <Link href="/admin/pulse" aria-label="StryvAdmin home" className="rounded-md bg-[#151515] px-3 py-2">
                   <BrandWordmark className="w-[154px]" />
                 </Link>
-                <SignOutButton className="ml-auto border-[#dedbd4] bg-white text-[#151515] hover:border-[#f24f09] hover:text-[#f24f09]" />
+                <SignOutButton className="admin-liquid-button ml-auto border-transparent bg-transparent text-[#151515] hover:text-[#f24f09]" />
               </div>
 
               <div className="mt-3 flex flex-wrap items-start justify-between gap-4 lg:mt-0">
@@ -199,12 +192,12 @@ function AdminHistoryControls() {
   const router = useRouter();
 
   return (
-    <div className="inline-flex items-center gap-1 rounded-full border border-[#dedbd4] bg-white p-1">
+    <div className="inline-flex items-center gap-1 rounded-full p-1">
       <button
         type="button"
         aria-label="Back"
         onClick={() => router.back()}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6d675f] transition hover:bg-[#f24f09] hover:text-white active:scale-95"
+        className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6d675f] transition hover:text-[#f24f09] active:scale-95"
       >
         <ArrowLeft className="h-4 w-4" strokeWidth={1.8} />
       </button>
@@ -212,14 +205,14 @@ function AdminHistoryControls() {
         type="button"
         aria-label="Forward"
         onClick={() => router.forward()}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6d675f] transition hover:bg-[#f24f09] hover:text-white active:scale-95"
+        className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6d675f] transition hover:text-[#f24f09] active:scale-95"
       >
         <ArrowRight className="h-4 w-4" strokeWidth={1.8} />
       </button>
       <Link
         href="/admin/pulse"
         aria-label="Admin home"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6d675f] transition hover:bg-[#f24f09] hover:text-white active:scale-95"
+        className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6d675f] transition hover:text-[#f24f09] active:scale-95"
       >
         <Home className="h-4 w-4" strokeWidth={1.8} />
       </Link>
@@ -237,7 +230,7 @@ function SidebarToggleButton({ collapsed, onToggle }: { collapsed: boolean; onTo
       aria-label={collapsed ? 'Expand admin sidebar' : 'Collapse admin sidebar'}
       title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       onClick={onToggle}
-      className="hidden h-10 w-10 items-center justify-center rounded-full border border-[#dedbd4] bg-white text-[#6d675f] transition hover:border-[#f24f09] hover:bg-[#fff8f2] hover:text-[#f24f09] active:scale-95 lg:inline-flex"
+      className="admin-liquid-button hidden h-10 w-10 items-center justify-center rounded-full text-[#6d675f] transition hover:text-[#f24f09] active:scale-95 lg:inline-flex"
     >
       <Icon className="h-4 w-4" strokeWidth={1.8} />
     </button>
@@ -339,24 +332,18 @@ function AdminNavItem({
   onClick?: () => void;
 }) {
   const className = collapsed
-    ? `relative inline-flex h-11 w-full min-w-0 items-center justify-center overflow-hidden border-0 bg-transparent px-0 font-caption text-[10px] uppercase tracking-[0.13em] transition ${
+    ? `admin-liquid-button relative inline-flex h-11 w-full min-w-0 items-center justify-center overflow-hidden border-0 bg-transparent px-0 font-caption text-[10px] uppercase tracking-[0.13em] transition ${
         active ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#151515]'
       }`
-    : `relative inline-flex min-h-11 min-w-0 items-center overflow-hidden rounded-md border font-caption text-[10px] uppercase tracking-[0.13em] transition ${
+    : `admin-liquid-button relative inline-flex min-h-11 min-w-0 items-center overflow-hidden rounded-md border font-caption text-[10px] uppercase tracking-[0.13em] transition ${
         horizontal ? 'flex-none' : 'w-full'
       } gap-3 px-3 ${
         active
-          ? 'border-[#f24f09] bg-[#f24f09] text-white shadow-[0_12px_30px_rgba(242,79,9,0.18)]'
-          : 'border-transparent text-[#6d675f] hover:border-[#dedbd4] hover:bg-white hover:text-[#151515]'
+          ? 'border-transparent bg-transparent text-[#f24f09] shadow-none'
+          : 'border-transparent bg-transparent text-[#6d675f] hover:text-[#151515]'
       }`;
   const content = (
     <>
-      {collapsed ? null : (
-        <motion.span
-          className="absolute inset-0 bg-white/0"
-          whileHover={{ backgroundColor: active ? 'rgba(255,255,255,0.08)' : 'rgba(242,79,9,0.06)' }}
-        />
-      )}
       <Icon className="relative z-10 h-4 w-4 flex-none" strokeWidth={1.8} />
       <span className={collapsed ? 'sr-only' : 'relative z-10 truncate'}>{label}</span>
     </>
@@ -368,6 +355,7 @@ function AdminNavItem({
         type="button"
         aria-label={label}
         title={collapsed ? label : undefined}
+        data-active={active ? 'true' : 'false'}
         onClick={onClick}
         whileHover={{ x: horizontal || collapsed ? 0 : 2, y: horizontal ? -1 : 0 }}
         whileTap={{ scale: 0.98 }}
@@ -380,7 +368,13 @@ function AdminNavItem({
 
   return (
     <motion.div whileHover={{ x: horizontal || collapsed ? 0 : 2, y: horizontal ? -1 : 0 }} whileTap={{ scale: 0.98 }}>
-      <Link href={href} aria-label={label} title={collapsed ? label : undefined} className={className}>
+      <Link
+        href={href}
+        aria-label={label}
+        title={collapsed ? label : undefined}
+        data-active={active ? 'true' : 'false'}
+        className={className}
+      >
         {content}
       </Link>
     </motion.div>

@@ -5,6 +5,7 @@ import {
   linearPriorityForSeverity,
   validateIncidentPayload,
 } from '../src/lib/incidents';
+import { shouldRunForNewYorkFivePm } from '../scripts/worker-incident-resolution-sync.mjs';
 
 describe('incident utilities', () => {
   test('normalizes volatile fingerprints', () => {
@@ -70,5 +71,11 @@ describe('incident utilities', () => {
     expect(interpretation.title).toBe('App Update Error');
     expect(interpretation.summary).toContain('installed app shell');
     expect(interpretation.technicalSummary).toContain('https://app.stryvsocietyfit.com/sw.js');
+  });
+
+  test('runs Linear issue tracking at 5PM New York time only', () => {
+    expect(shouldRunForNewYorkFivePm('2026-06-12T21:00:00.000Z')).toBe(true);
+    expect(shouldRunForNewYorkFivePm('2026-12-12T22:00:00.000Z')).toBe(true);
+    expect(shouldRunForNewYorkFivePm('2026-06-12T20:00:00.000Z')).toBe(false);
   });
 });

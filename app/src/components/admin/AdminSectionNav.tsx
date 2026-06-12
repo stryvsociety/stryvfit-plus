@@ -17,7 +17,7 @@ const sections = [
   { id: 'workouts', label: 'Workouts', icon: Dumbbell, href: '/admin/workouts' },
   { id: 'meals', label: 'Meals', icon: Salad, href: '/admin/pulse?tab=meals' },
   { id: 'clients', label: 'Clients', icon: UsersRound, href: '/admin/pulse?tab=clients' },
-  { id: 'support', label: 'Solvys', icon: LifeBuoy, href: '/admin/solvys-support' },
+  { id: 'support', label: 'Support', icon: LifeBuoy, href: '/admin/solvys-support' },
 ] satisfies Array<{
   id: AdminSection;
   label: string;
@@ -45,13 +45,6 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
                   : undefined;
           const content = (
             <>
-              {isActive ? (
-                <motion.span
-                  layoutId="admin-section-nav"
-                  className="absolute inset-x-3 bottom-1 h-0.5 rounded-full bg-[#f24f09]"
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                />
-              ) : null}
               <motion.span
                 className="relative z-10 inline-flex items-center gap-2 whitespace-nowrap"
                 animate={{ y: isActive ? -1 : 0 }}
@@ -62,7 +55,7 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
               </motion.span>
             </>
           );
-          const className = `relative inline-flex min-h-12 min-w-0 items-center justify-center rounded-md bg-transparent px-2 font-caption text-[9px] uppercase tracking-[0.12em] transition-colors sm:px-3 sm:text-[10px] sm:tracking-[0.14em] ${
+          const className = `admin-liquid-button relative inline-flex min-h-12 min-w-0 items-center justify-center rounded-md px-2 font-caption text-[9px] uppercase tracking-[0.12em] transition-colors sm:px-3 sm:text-[10px] sm:tracking-[0.14em] ${
             isActive ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#f24f09]'
           }`;
 
@@ -74,6 +67,7 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
                 onClick={clickHandler}
                 whileTap={{ scale: 0.98 }}
                 whileHover={{ y: -1 }}
+                data-active={isActive ? 'true' : 'false'}
                 className={className}
               >
                 {content}
@@ -87,6 +81,8 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
               href={section.href}
               whileTap={{ scale: 0.98 }}
               whileHover={{ y: -1 }}
+              data-active={isActive ? 'true' : 'false'}
+              aria-current={isActive ? 'page' : undefined}
               className={className}
             >
               {content}

@@ -154,7 +154,7 @@ export function SolvysSupportDashboard({
         <>
           <a
             href="/admin/solvys-support"
-            className="ios-pill inline-flex min-h-11 items-center gap-2 rounded-full border border-[#f24f09] px-5 font-caption text-[10px] uppercase tracking-[0.14em] text-current transition hover:bg-[#f24f09] hover:text-white active:scale-95"
+            className="admin-liquid-button ios-pill inline-flex min-h-11 items-center gap-2 rounded-full px-5 font-caption text-[10px] uppercase tracking-[0.14em] text-current transition hover:text-[#f24f09] active:scale-95"
           >
             <RefreshCw className="h-4 w-4" strokeWidth={1.7} />
             Refresh
@@ -216,8 +216,9 @@ export function SolvysSupportDashboard({
                         key={item.id}
                         type="button"
                         onClick={() => setFilter(item.id)}
-                        className={`min-h-10 rounded-sm px-3 font-caption text-[9px] uppercase tracking-[0.12em] transition ${
-                          active ? 'bg-[#151515] text-white' : 'bg-[#f5f2ed] text-[#6d675f] hover:text-[#f24f09]'
+                        aria-pressed={active}
+                        className={`admin-liquid-button min-h-10 rounded-sm px-3 font-caption text-[9px] uppercase tracking-[0.12em] transition ${
+                          active ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#f24f09]'
                         }`}
                       >
                         {item.label}
@@ -226,6 +227,9 @@ export function SolvysSupportDashboard({
                   })}
                 </div>
               </div>
+              <p className="mt-3 font-caption text-[9px] uppercase tracking-[0.14em] text-[#817b72]">
+                Issue tracking auto-checks Linear every day at 5:00 PM ET.
+              </p>
             </section>
 
             <section className="space-y-3">
