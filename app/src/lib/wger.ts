@@ -48,6 +48,14 @@ const fallbackExercises: WgerExercise[] = [
   },
 ];
 
+function normalizeLimit(limit = 12) {
+  return Math.min(Math.max(Number.isFinite(limit) ? Math.trunc(limit) : 12, 1), 30);
+}
+
+function fallbackForLimit(limit: number) {
+  return fallbackExercises.slice(0, limit);
+}
+
 function cleanHtml(value?: string) {
   return (value ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 }
@@ -78,10 +86,11 @@ export async function fetchWgerExercises({
   query?: string;
   limit?: number;
 } = {}): Promise<{ source: string; exercises: WgerExercise[] }> {
+  const normalizedLimit = normalizeLimit(limit);
   const baseUrl = (process.env.WGER_API_BASE_URL || 'https://wger.de').replace(/\/$/, '');
   const url = new URL('/api/v2/exerciseinfo/', baseUrl);
   url.searchParams.set('language', '2');
-  url.searchParams.set('limit', String(limit));
+  url.searchParams.set('limit', String(normalizedLimit));
   url.searchParams.set('format', 'json');
   if (query?.trim()) url.searchParams.set('term', query.trim());
 
@@ -97,16 +106,19 @@ export async function fetchWgerExercises({
     if (!res.ok) throw new Error(`wger returned ${res.status}`);
 
     const data = (await res.json()) as WgerListResponse<WgerExerciseInfo>;
-    const exercises = (data.results ?? []).map(normalizeExercise).filter((exercise) => exercise.name);
+    const exercises = (data.results ?? [])
+      .map(normalizeExercise)
+      .filter((exercise) => exercise.name)
+      .slice(0, normalizedLimit);
 
     return {
       source: baseUrl,
-      exercises: exercises.length > 0 ? exercises : fallbackExercises,
+      exercises: exercises.length > 0 ? exercises : fallbackForLimit(normalizedLimit),
     };
   } catch {
     return {
       source: 'fallback',
-      exercises: fallbackExercises,
+      exercises: fallbackForLimit(normalizedLimit),
     };
   }
 }
