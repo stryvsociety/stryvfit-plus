@@ -1123,10 +1123,6 @@ function ClientsPanel({
     >
       <section className="min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#f24f09]">Client CRM</p>
-            <h2 className="mt-1 font-section text-4xl leading-none">Profiles</h2>
-          </div>
           <label className="flex min-h-11 min-w-[min(22rem,100%)] items-center gap-2 rounded-md border border-[#dedbd4] bg-[#fbfaf8] px-3">
             <Search className="h-4 w-4 text-[#817b72]" strokeWidth={1.7} />
             <input
