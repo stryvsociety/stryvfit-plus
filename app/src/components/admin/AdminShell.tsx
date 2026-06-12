@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useState } from 'react';
+import { type CSSProperties, type ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -71,6 +71,7 @@ export function AdminShell({
   const shellClassName = isDark
     ? 'admin-theme-dark bg-[#070e13] text-white'
     : 'admin-theme-light bg-[#f3f1ec] text-[#151515]';
+  const adminLogoStyle = { '--text': isDark ? '#ffffff' : '#151515' } as CSSProperties;
   const desktopGridClassName = sidebarCollapsed
     ? 'lg:grid-cols-[76px_minmax(0,1fr)]'
     : 'lg:grid-cols-[248px_minmax(0,1fr)]';
@@ -87,8 +88,9 @@ export function AdminShell({
             href="/admin/pulse"
             aria-label="StryvAdmin home"
             title="StryvAdmin home"
-            className={`flex min-h-11 items-center justify-center rounded-md bg-[#151515] transition-all duration-300 ${
-              sidebarCollapsed ? 'px-0 py-2' : 'px-3 py-2'
+            style={adminLogoStyle}
+            className={`flex min-h-11 items-center border-0 bg-transparent px-0 py-2 shadow-none transition-all duration-300 ${
+              sidebarCollapsed ? 'justify-center' : 'justify-start'
             }`}
           >
             {sidebarCollapsed ? (
