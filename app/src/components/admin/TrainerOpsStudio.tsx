@@ -205,12 +205,13 @@ function ClientQueueChip({
     <button
       type="button"
       onClick={onSelect}
-      className={`relative w-full rounded-md border p-3 text-left transition ${
+      data-active={active ? 'true' : 'false'}
+      className={`admin-liquid-button relative w-full px-0 py-3 text-left transition ${
         active
-          ? 'border-[#f24f09] bg-[#fff3ec]'
+          ? 'text-[#f24f09]'
           : attention
-            ? 'border-[#d12f1b]/45 bg-[#fff7f3] hover:border-[#d12f1b]'
-            : 'border-[#e6e2da] bg-[#fbfaf8] hover:border-[#f24f09]/50'
+            ? 'text-[#d12f1b] hover:text-[#d12f1b]'
+            : 'text-[#151515] hover:text-[#f24f09]'
       }`}
     >
       {attention ? (
@@ -219,8 +220,8 @@ function ClientQueueChip({
       <span className="block pr-6 font-headline text-base uppercase leading-none">{client.name}</span>
       <span className="mt-1 block truncate font-body text-xs text-[#6d675f]">{client.goal}</span>
       <span
-        className={`mt-3 inline-flex rounded-sm px-2 py-1 font-caption text-[8px] uppercase tracking-[0.12em] ${
-          attention ? 'bg-[#d12f1b] text-white' : 'bg-[#151515] text-white'
+        className={`mt-3 inline-flex font-caption text-[8px] uppercase tracking-[0.12em] ${
+          attention ? 'text-[#d12f1b]' : 'text-[#817b72]'
         }`}
       >
         {attention ? 'Needs info' : client.status}
@@ -267,7 +268,7 @@ function AddClientHeaderAction({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="absolute right-0 top-14 z-50 w-[min(28rem,calc(100vw-2rem))] rounded-md border border-[#dedbd4] bg-white p-3 text-[#151515] shadow-[0_24px_80px_rgba(21,21,21,0.24)]"
+            className="absolute right-0 top-14 z-50 w-[min(28rem,calc(100vw-2rem))] rounded-md border border-[#dedbd4] bg-white p-3 text-[#151515]"
           >
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -360,14 +361,14 @@ function AddClientHeaderAction({
               </label>
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full bg-[#fbfaf8] px-3 py-2 font-caption text-[8px] uppercase tracking-[0.12em] text-[#6d675f]">
+              <span className="inline-flex items-center gap-2 font-caption text-[8px] uppercase tracking-[0.12em] text-[#6d675f]">
                 <MapPin className="h-3.5 w-3.5 text-[#f24f09]" />
                 {countyFromZip(draft.zip)}
               </span>
               <button
                 type="submit"
                 disabled={adding}
-                className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full bg-[#151515] px-4 font-caption text-[9px] uppercase tracking-[0.13em] text-white disabled:opacity-50"
+                className="admin-liquid-button inline-flex min-h-10 items-center gap-2 px-0 font-caption text-[9px] uppercase tracking-[0.13em] text-[#151515] hover:text-[#f24f09] disabled:opacity-50"
               >
                 <Plus className="h-4 w-4" strokeWidth={1.8} />
                 {adding ? 'Adding' : 'Add client'}
@@ -638,7 +639,7 @@ export function TrainerOpsStudio({
           data-testid="admin-client-rail-toggle-mobile"
           onClick={() => setClientRailOpen((open) => !open)}
           aria-expanded={clientRailOpen}
-          className="admin-liquid-button mb-4 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515] lg:hidden"
+          className="admin-liquid-button mb-4 inline-flex min-h-11 items-center gap-2 px-0 font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515] lg:hidden"
         >
           <UsersRound className="h-4 w-4 text-[#f24f09]" strokeWidth={1.8} />
           Clients
@@ -650,8 +651,8 @@ export function TrainerOpsStudio({
               initial={{ opacity: 0, x: 18 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 18 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="fixed bottom-5 right-4 top-36 z-40 w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-3 shadow-[0_24px_80px_rgba(21,21,21,0.22)] lg:right-8"
+              transition={{ duration: 0.34, ease: [0.4, 0, 0.2, 1] }}
+              className="fixed bottom-5 right-4 top-36 z-40 w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-3 lg:right-8"
             >
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
@@ -679,7 +680,7 @@ export function TrainerOpsStudio({
                   />
                 </label>
 
-                <div className="mt-3 rounded-md border border-[#f24f09]/35 bg-[#fff3ec] p-3">
+                <div className="admin-fade-stack mt-3 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#f24f09]">Next up</p>
@@ -696,7 +697,7 @@ export function TrainerOpsStudio({
                       ['Billing', selected.payment],
                       ['Mobile', selected.phone ?? 'Missing'],
                     ].map(([label, value]) => (
-                      <div key={label} className="flex items-center justify-between rounded-md bg-white px-2 py-1.5">
+                      <div key={label} className="flex items-center justify-between px-0 py-1.5">
                         <dt className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">{label}</dt>
                         <dd className="font-body text-[11px] text-[#151515]">{value}</dd>
                       </div>
@@ -708,7 +709,7 @@ export function TrainerOpsStudio({
                   <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Queue</p>
                   <div className="mt-2 space-y-2">
                     {queueClients.length === 0 ? (
-                      <p className="rounded-md border border-dashed border-[#dedbd4] bg-[#fbfaf8] p-3 font-body text-xs text-[#6d675f]">
+                      <p className="p-3 font-body text-xs text-[#6d675f]">
                         No other clients match this view.
                       </p>
                     ) : (
@@ -729,7 +730,7 @@ export function TrainerOpsStudio({
                   <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#d12f1b]">Needs attention</p>
                   <div className="mt-2 space-y-2">
                     {attentionClients.length === 0 ? (
-                      <p className="rounded-md border border-dashed border-[#dedbd4] bg-[#fbfaf8] p-3 font-body text-xs text-[#6d675f]">
+                      <p className="p-3 font-body text-xs text-[#6d675f]">
                         No flagged clients in this queue.
                       </p>
                     ) : (
@@ -750,7 +751,7 @@ export function TrainerOpsStudio({
                 <button
                   type="button"
                   onClick={() => setHealthOpen((open) => !open)}
-                  className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md border border-[#dedbd4] px-3 text-left font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515]"
+                  className="admin-liquid-button flex min-h-10 w-full items-center justify-between gap-3 px-0 text-left font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515]"
                 >
                   System health
                   {healthOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -762,7 +763,7 @@ export function TrainerOpsStudio({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="mt-3 rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-2"
+                      className="mt-3 p-2"
                     >
                       <SystemHealthPanel compact />
                     </motion.div>
@@ -892,8 +893,8 @@ function ClientsPanel({
           </label>
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-md border border-[#e6e2da]">
-          <div className="grid grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr_80px] gap-3 bg-[#fbfaf8] px-3 py-3 font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
+        <div className="mt-4 overflow-hidden">
+          <div className="grid grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr_80px] gap-3 px-0 py-3 font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
             <span>Client</span>
             <span>Body</span>
             <span>Focus</span>
@@ -909,8 +910,9 @@ function ClientsPanel({
                   key={`${client.id}:${client.email ?? client.name}`}
                   type="button"
                   onClick={() => onSelectClient(client.name)}
-                  className={`grid w-full grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr_80px] gap-3 px-3 py-3 text-left transition ${
-                    active ? 'bg-[#fff3ec]' : 'bg-white hover:bg-[#fbfaf8]'
+                  data-active={active ? 'true' : 'false'}
+                  className={`admin-liquid-button grid w-full grid-cols-[1.3fr_0.9fr_0.9fr_0.9fr_80px] gap-3 px-0 py-3 text-left transition ${
+                    active ? 'text-[#f24f09]' : 'text-[#151515] hover:text-[#f24f09]'
                   }`}
                 >
                   <span className="min-w-0">
@@ -919,13 +921,13 @@ function ClientsPanel({
                       {client.email ?? 'Email missing'}
                     </span>
                   </span>
-                  <span className="self-center rounded-sm bg-[#151515] px-2 py-1 text-center font-caption text-[8px] uppercase tracking-[0.11em] text-white">
+                  <span className="self-center text-center font-caption text-[8px] uppercase tracking-[0.11em] text-[#6d675f]">
                     {meta.bodyType}
                   </span>
-                  <span className="self-center rounded-sm bg-[#f2f0eb] px-2 py-1 text-center font-caption text-[8px] uppercase tracking-[0.11em] text-[#151515]">
+                  <span className="self-center text-center font-caption text-[8px] uppercase tracking-[0.11em] text-[#151515]">
                     {meta.focus}
                   </span>
-                  <span className="self-center rounded-sm bg-[#fbfaf8] px-2 py-1 text-center font-caption text-[8px] uppercase tracking-[0.11em] text-[#6d675f]">
+                  <span className="self-center text-center font-caption text-[8px] uppercase tracking-[0.11em] text-[#6d675f]">
                     {meta.county}
                   </span>
                   <span className="self-center text-right font-caption text-[8px] uppercase tracking-[0.11em] text-[#f24f09]">
@@ -960,7 +962,7 @@ function ClientsPanel({
           ].map((item) => {
             const Icon = item.icon;
             return (
-              <div key={item.label} className="flex items-center justify-between gap-3 rounded-md bg-[#fbfaf8] px-3 py-2">
+              <div key={item.label} className="flex items-center justify-between gap-3 px-0 py-2">
                 <span className="inline-flex items-center gap-2 font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
                   <Icon className="h-3.5 w-3.5 text-[#f24f09]" strokeWidth={1.7} />
                   {item.label}

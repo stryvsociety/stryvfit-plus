@@ -69,9 +69,9 @@ export function AdminShell({
   const isDark = theme === 'dark';
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const shellClassName = isDark
-    ? 'admin-theme-dark bg-[#070e13] text-white'
+    ? 'admin-theme-dark bg-[#050402] text-[#f0ead6]'
     : 'admin-theme-light bg-[#ebe5da] text-[#151515]';
-  const adminLogoStyle = { '--text': isDark ? '#ffffff' : '#151515' } as CSSProperties;
+  const adminLogoStyle = { '--text': isDark ? '#f0ead6' : '#151515' } as CSSProperties;
   const desktopGridClassName = sidebarCollapsed
     ? 'lg:grid-cols-[76px_minmax(0,1fr)]'
     : 'lg:grid-cols-[248px_minmax(0,1fr)]';
@@ -139,10 +139,10 @@ export function AdminShell({
         </aside>
 
         <section className="min-w-0">
-          <header className="sticky top-0 z-30 border-b border-[#dedbd4] bg-[#ebe5da] backdrop-blur-xl">
+          <header className="sticky top-0 z-30 border-b border-[#dedbd4] bg-[#ebe5da]">
             <div className="px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex flex-wrap items-center gap-3 lg:hidden">
-                <Link href="/admin/pulse" aria-label="StryvAdmin home" className="rounded-md bg-[#151515] px-3 py-2">
+                <Link href="/admin/pulse" aria-label="StryvAdmin home" className="bg-transparent px-0 py-2">
                   <BrandWordmark className="w-[154px]" />
                 </Link>
                 <SignOutButton className="admin-liquid-button ml-auto border-transparent bg-transparent text-[#151515] hover:text-[#f24f09]" />
@@ -177,9 +177,9 @@ export function AdminShell({
 
           <motion.div
             key={active}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.34, ease: [0.4, 0, 0.2, 1] }}
             className="px-4 py-5 sm:px-6 lg:px-8"
           >
             {children}
@@ -337,14 +337,14 @@ function AdminNavItem({
 }) {
   const className = collapsed
     ? `admin-liquid-button relative inline-flex h-11 w-full min-w-0 items-center justify-center overflow-hidden border-0 bg-transparent px-0 font-caption text-[10px] uppercase tracking-[0.13em] transition ${
-        active ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#151515]'
+        active ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#f24f09]'
       }`
     : `admin-liquid-button relative inline-flex min-h-12 min-w-0 items-center overflow-hidden border-0 bg-transparent font-caption text-[10px] uppercase tracking-[0.13em] shadow-none transition ${
         horizontal ? 'flex-none' : 'w-full'
       } gap-3 px-3 ${
         active
           ? 'text-[#f24f09]'
-          : 'text-[#6d675f] hover:text-[#151515]'
+          : 'text-[#6d675f] hover:text-[#f24f09]'
       }`;
   const content = (
     <>
@@ -361,8 +361,6 @@ function AdminNavItem({
         title={collapsed ? label : undefined}
         data-active={active ? 'true' : 'false'}
         onClick={onClick}
-        whileHover={{ x: horizontal || collapsed ? 0 : 2, y: horizontal ? -1 : 0 }}
-        whileTap={{ scale: 0.98 }}
         className={className}
       >
         {content}
@@ -371,7 +369,7 @@ function AdminNavItem({
   }
 
   return (
-    <motion.div whileHover={{ x: horizontal || collapsed ? 0 : 2, y: horizontal ? -1 : 0 }} whileTap={{ scale: 0.98 }}>
+    <motion.div>
       <Link
         href={href}
         aria-label={label}

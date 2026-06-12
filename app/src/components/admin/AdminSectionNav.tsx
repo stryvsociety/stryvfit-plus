@@ -30,7 +30,7 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
     <div className="-mx-1 px-1 pb-1">
       <nav
         aria-label="StryvAdmin sections"
-        className="grid min-h-14 grid-cols-3 gap-1 rounded-md border border-[#dedbd4] bg-white p-1 shadow-sm sm:grid-cols-5"
+        className="admin-fade-tabs grid min-h-14 grid-cols-3 bg-transparent sm:grid-cols-5"
       >
         {sections.map((section) => {
           const Icon = section.icon;
@@ -47,15 +47,15 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
             <>
               <motion.span
                 className="relative z-10 inline-flex items-center gap-2 whitespace-nowrap"
-                animate={{ y: isActive ? -1 : 0 }}
-                transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                animate={{ opacity: isActive ? 1 : 0.72 }}
+                transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
               >
                 <Icon className="h-4 w-4 flex-none" />
                 <span>{section.label}</span>
               </motion.span>
             </>
           );
-          const className = `admin-liquid-button relative inline-flex min-h-12 min-w-0 items-center justify-center rounded-md px-2 font-caption text-[9px] uppercase tracking-[0.12em] transition-colors sm:px-3 sm:text-[10px] sm:tracking-[0.14em] ${
+          const className = `admin-liquid-button relative inline-flex min-h-12 min-w-0 items-center justify-center bg-transparent px-2 font-caption text-[9px] uppercase tracking-[0.12em] transition-colors sm:px-3 sm:text-[10px] sm:tracking-[0.14em] ${
             isActive ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#f24f09]'
           }`;
 
@@ -65,8 +65,6 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
                 key={section.id}
                 type="button"
                 onClick={clickHandler}
-                whileTap={{ scale: 0.98 }}
-                whileHover={{ y: -1 }}
                 data-active={isActive ? 'true' : 'false'}
                 className={className}
               >
@@ -79,8 +77,6 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
             <motion.a
               key={section.id}
               href={section.href}
-              whileTap={{ scale: 0.98 }}
-              whileHover={{ y: -1 }}
               data-active={isActive ? 'true' : 'false'}
               aria-current={isActive ? 'page' : undefined}
               className={className}
