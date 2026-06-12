@@ -369,9 +369,7 @@ export function PWAClient() {
     return null;
   }, [updateReady]);
 
-  if (!banner || hidePromptsOnAdminSignIn) return null;
-
-  const Icon = banner.icon;
+  const Icon = banner?.icon;
 
   async function handleAction() {
     if (banner?.action === 'update') {
@@ -384,25 +382,35 @@ export function PWAClient() {
   }
 
   return (
-    <aside className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md">
-      <div className={`flex items-start gap-3 rounded-md border px-4 py-3 shadow-glass ${banner.tone}`}>
-        <Icon className="mt-0.5 h-5 w-5 flex-none text-gold" strokeWidth={1.7} />
-        <div className="min-w-0 flex-1">
-          <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-text">
-            {banner.title}
-          </p>
-          <p className="mt-1 font-body text-xs leading-relaxed text-text-muted">{banner.body}</p>
-          {banner.action ? (
-            <button
-              type="button"
-              onClick={handleAction}
-              className="ios-pill mt-3 inline-flex min-h-9 items-center justify-center rounded-full bg-gold px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-bg transition-colors hover:bg-gold-deep"
-            >
-              Refresh app
-            </button>
-          ) : null}
+    <>
+      <aside className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-4 z-[60] max-w-[calc(100vw-2rem)]">
+        <div className="rounded-[22px] border border-white/14 bg-[#111111]/90 px-4 py-2.5 font-body text-[13px] leading-none text-text shadow-[0_18px_46px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl">
+          yesterday&apos;s bugs have been zapped
         </div>
-      </div>
-    </aside>
+      </aside>
+
+      {banner && !hidePromptsOnAdminSignIn && Icon ? (
+        <aside className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md">
+          <div className={`flex items-start gap-3 rounded-md border px-4 py-3 shadow-glass ${banner.tone}`}>
+            <Icon className="mt-0.5 h-5 w-5 flex-none text-gold" strokeWidth={1.7} />
+            <div className="min-w-0 flex-1">
+              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-text">
+                {banner.title}
+              </p>
+              <p className="mt-1 font-body text-xs leading-relaxed text-text-muted">{banner.body}</p>
+              {banner.action ? (
+                <button
+                  type="button"
+                  onClick={handleAction}
+                  className="ios-pill mt-3 inline-flex min-h-9 items-center justify-center rounded-full bg-gold px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-bg transition-colors hover:bg-gold-deep"
+                >
+                  Refresh app
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </aside>
+      ) : null}
+    </>
   );
 }
