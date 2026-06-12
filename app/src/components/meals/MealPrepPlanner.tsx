@@ -252,12 +252,22 @@ export function MealPrepPlanner({
 
   return (
     <div className="space-y-5">
-      <section className="grid gap-5 rounded-sm border border-gold/15 bg-surface-2/80 p-4 sm:grid-cols-5">
+      <section
+        className={
+          admin
+            ? 'grid gap-5 rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-4 sm:grid-cols-5'
+            : 'grid gap-5 rounded-sm border border-gold/15 bg-surface-2/80 p-4 sm:grid-cols-5'
+        }
+      >
         <div className="sm:col-span-2">
-          <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">
+          <p
+            className={`font-caption text-[10px] uppercase tracking-[0.16em] ${
+              admin ? 'text-[#f24f09]' : 'text-gold'
+            }`}
+          >
             {admin ? 'StryvAdmin meals' : 'Ideal Nutrition'}
           </p>
-          <h2 className="mt-2 font-section text-3xl leading-none tracking-normal">
+          <h2 className={`mt-2 font-section text-3xl leading-none tracking-normal ${admin ? 'text-[#151515]' : ''}`}>
             {admin ? 'Build the plan' : "Today's meal plan"}
           </h2>
         </div>
@@ -280,8 +290,14 @@ export function MealPrepPlanner({
                   : ''
               } sm:before:absolute sm:before:inset-y-3 sm:before:left-0 sm:before:w-px sm:before:bg-[linear-gradient(to_bottom,transparent,rgba(242,79,9,0.32),transparent)] sm:first:before:hidden`}
             >
-              <p className="font-caption text-[9px] uppercase tracking-[0.14em] text-text-dim">{label}</p>
-              <p className="mt-1 font-headline text-lg text-text">{value}</p>
+              <p
+                className={`font-caption text-[9px] uppercase tracking-[0.14em] ${
+                  admin ? 'text-[#817b72]' : 'text-text-dim'
+                }`}
+              >
+                {label}
+              </p>
+              <p className={`mt-1 font-headline text-lg ${admin ? 'text-[#151515]' : 'text-text'}`}>{value}</p>
             </div>
           ))}
         </div>
@@ -289,13 +305,13 @@ export function MealPrepPlanner({
 
       {admin ? (
         <section className="flex flex-col gap-3 sm:flex-row">
-          <label className="flex min-h-11 flex-1 items-center gap-2 rounded-sm border border-border bg-surface-3 px-3">
-            <Search className="h-4 w-4 text-text-dim" strokeWidth={1.7} />
+          <label className="flex min-h-11 flex-1 items-center gap-2 rounded-md border border-[#dedbd4] bg-[#fbfaf8] px-3">
+            <Search className="h-4 w-4 text-[#817b72]" strokeWidth={1.7} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search meals or macros"
-              className="min-w-0 flex-1 bg-transparent font-body text-sm text-text outline-none placeholder:text-text-dim"
+              className="min-w-0 flex-1 bg-transparent font-body text-sm text-[#151515] outline-none placeholder:text-[#817b72]"
             />
           </label>
           <div className="admin-fade-tabs flex overflow-x-auto pb-1">
@@ -307,8 +323,8 @@ export function MealPrepPlanner({
                 aria-pressed={filter === item}
                 className={`admin-liquid-button min-h-11 whitespace-nowrap border-0 bg-transparent px-3 font-caption text-[10px] uppercase tracking-[0.14em] shadow-none transition-colors ${
                   filter === item
-                    ? 'text-gold'
-                    : 'text-text-muted hover:text-text'
+                    ? 'text-[#f24f09]'
+                    : 'text-[#6d675f] hover:text-[#151515]'
                 }`}
               >
                 {item}
@@ -336,7 +352,7 @@ export function MealPrepPlanner({
 
       {admin ? (
         <section className="py-3">
-          <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-text-dim">
+          <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">
             Workout flow
           </p>
           <div className="admin-fade-tabs mt-3 flex flex-wrap overflow-hidden">
@@ -351,8 +367,8 @@ export function MealPrepPlanner({
                 aria-pressed={workoutFocus === item}
                 className={`admin-liquid-button min-h-11 flex-1 basis-1/2 border-0 bg-transparent px-3 font-caption text-[10px] uppercase tracking-[0.14em] shadow-none transition-colors sm:basis-0 ${
                   workoutFocus === item
-                    ? 'text-gold'
-                    : 'text-text-muted hover:text-text'
+                    ? 'text-[#f24f09]'
+                    : 'text-[#6d675f] hover:text-[#151515]'
                 }`}
               >
                 {item}
@@ -373,7 +389,13 @@ export function MealPrepPlanner({
       ) : null}
 
       {loading ? (
-        <div className="flex min-h-56 items-center justify-center rounded-sm border border-border bg-surface-2">
+        <div
+          className={
+            admin
+              ? 'flex min-h-56 items-center justify-center rounded-md border border-[#dedbd4] bg-[#fbfaf8]'
+              : 'flex min-h-56 items-center justify-center rounded-sm border border-border bg-surface-2'
+          }
+        >
           <RefreshCw className="h-6 w-6 animate-spin text-gold" strokeWidth={1.6} />
         </div>
       ) : (
@@ -383,21 +405,27 @@ export function MealPrepPlanner({
             return (
               <article
                 key={meal.id}
-                className={`${admin ? 'grid grid-cols-[112px_1fr] gap-3 p-3' : 'flex min-w-[88%] flex-col gap-4 p-4 sm:min-w-[70%]'} snap-center rounded-sm border bg-surface-2 transition-colors md:min-w-0 ${
-                  selected ? 'border-gold/70' : 'border-border hover:border-gold/35'
+                className={`${admin ? 'grid grid-cols-[112px_1fr] gap-3 rounded-md bg-[#fbfaf8] p-3' : 'flex min-w-[88%] flex-col gap-4 rounded-sm bg-surface-2 p-4 sm:min-w-[70%]'} snap-center border transition-colors md:min-w-0 ${
+                  selected
+                    ? admin
+                      ? 'border-[#f24f09]/70'
+                      : 'border-gold/70'
+                    : admin
+                      ? 'border-[#e6e2da] hover:border-[#f24f09]/45'
+                      : 'border-border hover:border-gold/35'
                 }`}
               >
                 <div
-                  className={admin ? 'min-h-36 rounded-sm bg-surface-3 bg-cover bg-center' : 'aspect-[4/3] min-h-56 rounded-sm bg-surface-3 bg-cover bg-center'}
+                  className={admin ? 'min-h-36 rounded-md bg-[#eeeae4] bg-cover bg-center' : 'aspect-[4/3] min-h-56 rounded-sm bg-surface-3 bg-cover bg-center'}
                   style={meal.image_url ? { backgroundImage: `url(${meal.image_url})` } : undefined}
                 />
                 <div className="min-w-0">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className={admin ? 'font-headline text-base uppercase leading-tight text-text' : 'font-headline text-2xl uppercase leading-tight text-text'}>
+                      <h3 className={admin ? 'font-headline text-base uppercase leading-tight text-[#151515]' : 'font-headline text-2xl uppercase leading-tight text-text'}>
                         {meal.name}
                       </h3>
-                      <p className={admin ? 'mt-1 line-clamp-2 font-body text-xs leading-relaxed text-text-muted' : 'mt-2 font-body text-sm leading-relaxed text-text-muted'}>
+                      <p className={admin ? 'mt-1 line-clamp-2 font-body text-xs leading-relaxed text-[#6d675f]' : 'mt-2 font-body text-sm leading-relaxed text-text-muted'}>
                         {meal.subtitle}
                       </p>
                     </div>
@@ -409,8 +437,8 @@ export function MealPrepPlanner({
                         aria-pressed={selected}
                         className={`admin-liquid-button flex h-8 w-8 flex-none items-center justify-center rounded-sm border transition-colors ${
                           selected
-                            ? 'text-gold'
-                            : 'text-text-muted hover:text-gold'
+                            ? 'text-[#f24f09]'
+                            : 'text-[#817b72] hover:text-[#f24f09]'
                         }`}
                       >
                         {selected ? <Check className="h-4 w-4" strokeWidth={2} /> : '+'}
@@ -425,11 +453,17 @@ export function MealPrepPlanner({
                       ['Carb', `${meal.carbs_g}g`],
                       ['Fat', `${meal.fat_g}g`],
                     ].map(([label, value]) => (
-                      <div key={label} className="rounded-sm bg-bg/70 px-1 py-2.5">
-                        <dt className="font-caption text-[8px] uppercase tracking-[0.1em] text-text-dim">
+                      <div key={label} className={`rounded-sm px-1 py-2.5 ${admin ? 'bg-[#f5f2ed]' : 'bg-bg/70'}`}>
+                        <dt
+                          className={`font-caption text-[8px] uppercase tracking-[0.1em] ${
+                            admin ? 'text-[#817b72]' : 'text-text-dim'
+                          }`}
+                        >
                           {label}
                         </dt>
-                        <dd className="mt-0.5 font-body text-[11px] text-text">{value}</dd>
+                        <dd className={`mt-0.5 font-body text-[11px] ${admin ? 'text-[#151515]' : 'text-text'}`}>
+                          {value}
+                        </dd>
                       </div>
                     ))}
                   </dl>
@@ -437,7 +471,9 @@ export function MealPrepPlanner({
                     href={affiliateUrl(meal.product_url)}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-3 inline-flex items-center gap-1 font-caption text-[9px] uppercase tracking-[0.14em] text-text-dim hover:text-gold"
+                    className={`mt-3 inline-flex items-center gap-1 font-caption text-[9px] uppercase tracking-[0.14em] ${
+                      admin ? 'text-[#817b72] hover:text-[#f24f09]' : 'text-text-dim hover:text-gold'
+                    }`}
                   >
                     Ideal Nutrition <ExternalLink className="h-3 w-3" strokeWidth={1.7} />
                   </a>

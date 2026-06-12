@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { BOOKING_CONSENT_FORM_URL } from '../src/lib/bookingConsent';
 import { buildAvailableTimes, buildAvailableTimesForDate, parseBookingAvailability } from '../src/lib/bookingAvailability';
 import {
+  adminBookingClientName,
   adminClientSummariesFromBookings,
   buildBookingMetadata,
   mergeAdminClientSummaries,
@@ -157,5 +158,53 @@ describe('booking utilities', () => {
 
     expect(merged).toHaveLength(1);
     expect(merged[0].id).toBe('profile-client');
+  });
+
+  test('links StryvFit+ subscription session imports to saved client profiles by name', () => {
+    const subscriptionBooking: AdminBookingSummary = {
+      id: 'calendar:nyce-subscription',
+      source: 'google_calendar',
+      serviceType: 'coaching',
+      serviceLabel: 'StryvFit+ session for Nyce Reynolds',
+      status: 'confirmed',
+      startsAt: '2026-06-12T13:00:00.000Z',
+      endsAt: '2026-06-12T14:00:00.000Z',
+      durationMinutes: 60,
+      clientName: 'StryvFit+ session for Nyce Reynolds',
+      clientEmail: null,
+      clientPhone: null,
+      googleEventId: 'external-nyce-event',
+    };
+
+    expect(adminBookingClientName(subscriptionBooking)).toBe('Nyce Reynolds');
+
+    const bookingClients = adminClientSummariesFromBookings([subscriptionBooking]);
+    expect(bookingClients).toMatchObject([
+      {
+        id: 'booking:calendar:nyce-subscription',
+        name: 'Nyce Reynolds',
+        email: null,
+        status: 'Booked appointment',
+      },
+    ]);
+
+    const merged = mergeAdminClientSummaries(
+      [
+        {
+          id: 'profile-nyce',
+          name: 'Nyce Reynolds',
+          email: 'blackrockstarmg@gmail.com',
+          phone: null,
+          status: 'Client account',
+          goal: 'Client profile',
+          payment: 'No billing yet',
+        },
+      ],
+      bookingClients
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].id).toBe('profile-nyce');
+    expect(merged[0].name).toBe('Nyce Reynolds');
   });
 });

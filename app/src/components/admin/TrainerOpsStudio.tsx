@@ -30,7 +30,7 @@ import { SystemHealthPanel } from '@/components/incidents/SystemHealthPanel';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { FloatingPostToClientButton } from '@/components/admin/FloatingPostToClientButton';
 import { usePersistedTheme } from '@/components/ui/ThemeToggle';
-import type { AdminBookingSummary, AdminClientSummary, BookingStatus } from '@/lib/bookings';
+import { adminBookingClientName, type AdminBookingSummary, type AdminClientSummary, type BookingStatus } from '@/lib/bookings';
 import { BOOKING_SERVICES } from '@/lib/bookingServices';
 import { combineBookingTzDateAndTime } from '@/lib/bookingAvailability';
 
@@ -146,7 +146,7 @@ const prepChecklist = [
 ];
 
 function clientNameFromBooking(booking: AdminBookingSummary): string {
-  return booking.clientName?.trim() || booking.clientEmail?.trim() || 'StryvFit+ client';
+  return adminBookingClientName(booking);
 }
 
 function clientRosterKey(email: string | null | undefined, name: string): string {
@@ -1323,7 +1323,7 @@ function MealsPanel({
         </div>
       </section>
 
-      <section className="relative min-h-[640px] overflow-hidden rounded-md border border-[#dedbd4] bg-[#151515] p-3 text-white">
+      <section className="relative min-h-[640px] overflow-hidden rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-3 text-[#151515]">
         <div className="min-h-[610px]">
           <MealPrepPlanner
             admin

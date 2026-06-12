@@ -355,12 +355,35 @@ function adminClientRosterKey(client: Pick<AdminClientSummary, 'email' | 'name'>
   return (client.email?.trim().toLowerCase() || client.name.trim().toLowerCase()).replace(/\s+/g, ' ');
 }
 
+function adminClientEmailKey(email: string | null | undefined): string | null {
+  return email?.trim().toLowerCase() || null;
+}
+
+function adminClientNameKey(name: string | null | undefined): string | null {
+  const normalized = name?.trim().toLowerCase().replace(/\s+/g, ' ');
+  return normalized || null;
+}
+
+export function stryvFitSessionClientName(value: string | null | undefined): string | null {
+  const normalized = value?.trim().replace(/\s+/g, ' ');
+  if (!normalized) return null;
+
+  const match = normalized.match(/^stryvfit\+\s*(?::|-)?\s*session\s+for\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+export function adminBookingClientName(booking: Pick<AdminBookingSummary, 'clientName' | 'clientEmail'>): string {
+  const clientName = booking.clientName?.trim();
+  return stryvFitSessionClientName(clientName) || clientName || booking.clientEmail?.trim() || 'StryvFit+ client';
+}
+
 export function adminClientSummariesFromBookings(bookings: AdminBookingSummary[]): AdminClientSummary[] {
   const byKey = new Map<string, AdminClientSummary>();
 
   for (const booking of bookings) {
-    const name = booking.clientName?.trim() || booking.clientEmail?.trim();
+    const rawName = booking.clientName?.trim();
     const email = booking.clientEmail?.trim().toLowerCase() || null;
+    const name = rawName ? adminBookingClientName(booking) : booking.clientEmail?.trim();
     if (!name && !email) continue;
 
     const client: AdminClientSummary = {
@@ -383,10 +406,31 @@ export function mergeAdminClientSummaries(
   primaryClients: AdminClientSummary[],
   fallbackClients: AdminClientSummary[]
 ): AdminClientSummary[] {
-  const byKey = new Map(primaryClients.map((client) => [adminClientRosterKey(client), client]));
+  const byKey = new Map<string, AdminClientSummary>();
+  const emailKeys = new Map<string, string>();
+  const nameKeys = new Map<string, string>();
+
+  function rememberClient(key: string, client: AdminClientSummary) {
+    byKey.set(key, client);
+
+    const emailKey = adminClientEmailKey(client.email);
+    if (emailKey) emailKeys.set(emailKey, key);
+
+    const nameKey = adminClientNameKey(client.name);
+    if (nameKey) nameKeys.set(nameKey, key);
+  }
+
+  for (const client of primaryClients) {
+    rememberClient(adminClientRosterKey(client), client);
+  }
+
   for (const client of fallbackClients) {
-    const key = adminClientRosterKey(client);
-    if (!byKey.has(key)) byKey.set(key, client);
+    const emailKey = adminClientEmailKey(client.email);
+    const nameKey = adminClientNameKey(client.name);
+    const existingKey = (emailKey ? emailKeys.get(emailKey) : null) || (nameKey ? nameKeys.get(nameKey) : null);
+    if (existingKey) continue;
+
+    rememberClient(adminClientRosterKey(client), client);
   }
   return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

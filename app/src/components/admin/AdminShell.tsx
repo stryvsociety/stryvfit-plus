@@ -223,10 +223,10 @@ export function AdminShell({
                     <AdminHistoryControls />
                     <AdminBreadcrumbs breadcrumbs={breadcrumbs} />
                   </div>
-                  <div className="mt-3 flex flex-wrap items-end gap-4">
+                  <div className="mt-3 flex flex-wrap items-center gap-4">
                     <h1 className="font-section text-4xl leading-none tracking-normal">{title}</h1>
                     {headerControl ? (
-                      <div className="w-full max-w-[26rem] sm:w-[22rem] lg:w-[26rem] lg:pb-1">{headerControl}</div>
+                      <div className="w-full max-w-[26rem] sm:w-[22rem] lg:w-[26rem]">{headerControl}</div>
                     ) : null}
                   </div>
                 </div>
