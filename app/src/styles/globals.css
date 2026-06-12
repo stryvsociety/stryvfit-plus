@@ -490,12 +490,45 @@ button:hover .logo-wordmark,
       opacity 180ms ease,
       transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+  .admin-theme-light button:not([data-liquid='off']):not(.admin-liquid-button)::after,
+  .admin-theme-dark button:not([data-liquid='off']):not(.admin-liquid-button)::after {
+    content: '';
+    position: absolute;
+    left: 0.8rem;
+    right: 0.8rem;
+    top: 50%;
+    z-index: 0;
+    height: 1.2rem;
+    border-radius: 9999px;
+    background: radial-gradient(ellipse at center, rgba(242, 79, 9, 0.42), rgba(242, 79, 9, 0));
+    filter: blur(10px);
+    opacity: 0;
+    transform: translateY(-50%) scaleX(0.82);
+    transition:
+      opacity 200ms ease,
+      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
   .admin-theme-light button:not([data-liquid='off']):not(.admin-liquid-button):hover::before,
   .admin-theme-light button:not([data-liquid='off']):not(.admin-liquid-button):focus-visible::before,
   .admin-theme-dark button:not([data-liquid='off']):not(.admin-liquid-button):hover::before,
   .admin-theme-dark button:not([data-liquid='off']):not(.admin-liquid-button):focus-visible::before {
     opacity: 1;
     transform: scaleX(1);
+  }
+  .admin-theme-light button[aria-pressed='true']:not([data-liquid='off']),
+  .admin-theme-dark button[aria-pressed='true']:not([data-liquid='off']) {
+    border-color: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+  }
+  .admin-theme-light button[aria-pressed='true']:not([data-liquid='off'])::before,
+  .admin-theme-dark button[aria-pressed='true']:not([data-liquid='off'])::before {
+    opacity: 0;
+  }
+  .admin-theme-light button[aria-pressed='true']:not([data-liquid='off'])::after,
+  .admin-theme-dark button[aria-pressed='true']:not([data-liquid='off'])::after {
+    opacity: 0.44;
+    transform: translateY(-50%) scaleX(1);
   }
   .admin-theme-light button:not([data-liquid='off']):not(.admin-liquid-button) > *,
   .admin-theme-dark button:not([data-liquid='off']):not(.admin-liquid-button) > * {

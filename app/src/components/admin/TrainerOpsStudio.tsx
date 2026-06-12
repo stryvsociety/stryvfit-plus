@@ -628,7 +628,7 @@ export function TrainerOpsStudio({
           data-testid="admin-client-rail-toggle"
           onClick={() => setClientRailOpen((open) => !open)}
           aria-expanded={clientRailOpen}
-          className="fixed right-4 top-44 z-40 hidden translate-x-1/2 rotate-90 items-center gap-2 rounded-t-md border border-[#dedbd4] bg-[#151515] px-4 py-2 font-caption text-[10px] uppercase tracking-[0.14em] text-white shadow-[0_16px_42px_rgba(21,21,21,0.22)] transition hover:bg-[#f24f09] lg:inline-flex"
+          className="admin-liquid-button fixed right-4 top-44 z-40 hidden translate-x-1/2 rotate-90 items-center gap-2 rounded-t-md px-4 py-2 font-caption text-[10px] uppercase tracking-[0.14em] text-[#f24f09] transition lg:inline-flex"
         >
           <UsersRound className="h-4 w-4" strokeWidth={1.8} />
           Clients
@@ -638,7 +638,7 @@ export function TrainerOpsStudio({
           data-testid="admin-client-rail-toggle-mobile"
           onClick={() => setClientRailOpen((open) => !open)}
           aria-expanded={clientRailOpen}
-          className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#dedbd4] bg-white px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515] lg:hidden"
+          className="admin-liquid-button mb-4 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515] lg:hidden"
         >
           <UsersRound className="h-4 w-4 text-[#f24f09]" strokeWidth={1.8} />
           Clients
@@ -662,7 +662,7 @@ export function TrainerOpsStudio({
                   type="button"
                   onClick={() => setClientRailOpen(false)}
                   aria-label="Close clients rail"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#dedbd4] bg-white text-[#6d675f] transition hover:border-[#f24f09] hover:text-[#f24f09]"
+                  className="admin-liquid-button inline-flex h-9 w-9 items-center justify-center rounded-full text-[#6d675f] transition hover:text-[#f24f09]"
                 >
                   <X className="h-4 w-4" strokeWidth={1.8} />
                 </button>
@@ -1361,10 +1361,8 @@ function AppointmentsPanel({
                   type="button"
                   aria-pressed={active}
                   onClick={() => setAppointmentView(value as AppointmentView)}
-                  className={`ios-pill min-h-9 rounded-full px-4 font-caption text-[9px] uppercase tracking-[0.13em] transition ${
-                    active
-                      ? 'bg-[#151515] text-white'
-                      : 'text-[#6d675f] hover:bg-white hover:text-[#151515]'
+                  className={`admin-liquid-button ios-pill min-h-9 rounded-full px-4 font-caption text-[9px] uppercase tracking-[0.13em] transition ${
+                    active ? 'text-[#f24f09]' : 'text-[#6d675f] hover:text-[#151515]'
                   }`}
                 >
                   {label}
