@@ -17,11 +17,24 @@ export type AppUser = {
   stripe_customer_id: string | null;
 };
 
+const ADMIN_EMAIL_DOMAIN = 'stryvsocietyfit.com';
+
 function configuredAdminEmails(): string[] {
   return (process.env.ADMIN_EMAILS ?? process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '')
     .split(',')
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean);
+}
+
+export function isAdminEmail(email: string | null | undefined): boolean {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) return false;
+
+  return configuredAdminEmails().includes(normalizedEmail) || normalizedEmail.endsWith(`@${ADMIN_EMAIL_DOMAIN}`);
+}
+
+export function isAdminRole(role: AppRole): boolean {
+  return role === 'admin' || role === 'trainer' || role === 'support';
 }
 
 function roleFromMetadata(metadata: Record<string, unknown> | undefined): AppRole | null {
@@ -76,7 +89,7 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
   const metadataRole =
     roleFromMetadata(user.privateMetadata as Record<string, unknown> | undefined) ??
     roleFromMetadata(user.publicMetadata as Record<string, unknown> | undefined);
-  const role: AppRole = metadataRole ?? (configuredAdminEmails().includes(email) ? 'admin' : 'client');
+  const role: AppRole = metadataRole ?? (isAdminEmail(email) ? 'admin' : 'client');
   const fullName = user.fullName ?? user.firstName ?? email;
   const phone = user.primaryPhoneNumber?.phoneNumber ?? null;
 
@@ -179,16 +192,8 @@ export async function requireFirstSessionBooked(): Promise<AppUser> {
 export async function requireAdminUser(): Promise<AppUser> {
   const appUser = await getCurrentAppUser();
   if (!appUser) redirect(ADMIN_SIGN_IN_PATH);
-  const allowlist = configuredAdminEmails();
 
-  if (allowlist.length > 0) {
-    if (!allowlist.includes(appUser.email.toLowerCase())) {
-      redirect('/admin/access-denied');
-    }
-    return appUser;
-  }
-
-  if (appUser.role !== 'admin' && appUser.role !== 'trainer' && appUser.role !== 'support') {
+  if (!isAdminEmail(appUser.email) && !isAdminRole(appUser.role)) {
     redirect('/book');
   }
   return appUser;
@@ -210,15 +215,7 @@ export async function requireApiAdmin(): Promise<AppUser | NextResponse> {
   const appUser = await requireApiUser();
   if (appUser instanceof NextResponse) return appUser;
 
-  const allowlist = configuredAdminEmails();
-  if (allowlist.length > 0) {
-    if (!allowlist.includes(appUser.email.toLowerCase())) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-    }
-    return appUser;
-  }
-
-  if (appUser.role !== 'admin' && appUser.role !== 'trainer' && appUser.role !== 'support') {
+  if (!isAdminEmail(appUser.email) && !isAdminRole(appUser.role)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   return appUser;

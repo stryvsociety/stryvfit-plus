@@ -1,9 +1,16 @@
 import { SignIn } from '@clerk/nextjs';
 import Link from 'next/link';
 import { CalendarDays, LogIn } from 'lucide-react';
+import { redirect } from 'next/navigation';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { InstallAppPrompt } from '@/components/pwa/InstallAppPrompt';
-import { FIRST_SESSION_BOOKING_PATH, FIRST_SESSION_SIGN_UP_PATH, MEMBER_SIGN_IN_PATH } from '@/lib/routes';
+import { getCurrentAppUser } from '@/lib/auth';
+import { destinationForSignedInSignInLanding } from '@/lib/signInRedirect';
+import {
+  FIRST_SESSION_BOOKING_PATH,
+  FIRST_SESSION_SIGN_UP_PATH,
+  MEMBER_SIGN_IN_PATH,
+} from '@/lib/routes';
 
 type SignInPageProps = {
   params?: Promise<{ 'sign-in'?: string[] }>;
@@ -11,11 +18,15 @@ type SignInPageProps = {
 };
 
 export default async function SignInPage({ params, searchParams }: SignInPageProps) {
-  const routeParams = await params;
-  const query = await searchParams;
+  const [routeParams, query, appUser] = await Promise.all([params, searchParams, getCurrentAppUser()]);
   const isReturningUserFlow = Boolean(routeParams?.['sign-in']?.length);
   const redirectPath = firstParam(query?.redirect_url) ?? FIRST_SESSION_BOOKING_PATH;
-  const returningHref = `${MEMBER_SIGN_IN_PATH}?redirect_url=${encodeURIComponent(redirectPath)}`;
+  const postSignInRedirectPath = firstParam(query?.redirect_url) ?? '/sign-in';
+  const returningHref = `${MEMBER_SIGN_IN_PATH}?redirect_url=${encodeURIComponent(postSignInRedirectPath)}`;
+
+  if (!isReturningUserFlow && appUser) {
+    redirect(destinationForSignedInSignInLanding(appUser, redirectPath));
+  }
 
   return (
     <main className="auth-shell bg-bg text-text">
@@ -37,7 +48,7 @@ export default async function SignInPage({ params, searchParams }: SignInPagePro
           </div>
         ) : (
           <div className="w-full rounded-md border border-gold/15 bg-surface-2/70 p-5 text-left shadow-glass sm:p-6">
-            <p className="font-caption text-[10px] uppercase tracking-[0.18em] text-gold">Welcome back?</p>
+            <p className="font-caption text-[10px] uppercase tracking-[0.18em] text-gold">Welcome back</p>
             <h1 className="mt-3 font-section text-3xl leading-none tracking-normal text-text">
               Sign in or start your first session
             </h1>

@@ -4,7 +4,7 @@ import { SignIn, useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { BrandWordmark } from '@/components/BrandWordmark';
-import { ADMIN_SIGN_IN_PATH } from '@/lib/routes';
+import { ADMIN_DASHBOARD_PATH, ADMIN_SIGN_IN_PATH } from '@/lib/routes';
 
 export function AdminGoogleSignIn() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -12,7 +12,7 @@ export function AdminGoogleSignIn() {
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      router.replace('/admin/pulse');
+      router.replace(ADMIN_DASHBOARD_PATH);
     }
   }, [isLoaded, isSignedIn, router]);
 
@@ -29,8 +29,8 @@ export function AdminGoogleSignIn() {
           <SignIn
             routing="path"
             path={ADMIN_SIGN_IN_PATH}
-            forceRedirectUrl="/admin/pulse"
-            fallbackRedirectUrl="/admin/pulse"
+            forceRedirectUrl={ADMIN_DASHBOARD_PATH}
+            fallbackRedirectUrl={ADMIN_DASHBOARD_PATH}
             appearance={{
               elements: {
                 card: 'mx-auto w-full',
@@ -41,7 +41,7 @@ export function AdminGoogleSignIn() {
           />
         </div>
         <p className="mt-4 text-center font-body text-xs text-text-muted">
-          Sign in with Google. Only emails in ADMIN_EMAILS can open StryvAdmin.
+          Sign in with a Stryv Society Fit email to open StryvAdmin.
         </p>
       </section>
     </main>

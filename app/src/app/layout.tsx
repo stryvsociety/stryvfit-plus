@@ -3,7 +3,6 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { Anton, Athiti, Cinzel, DM_Sans, Inter, Karma, Offside, Oswald, Overpass } from 'next/font/google';
 import { ErrorBoundary } from '@/components/incidents/ErrorBoundary';
 import LenisProvider from '@/components/landing/LenisProvider';
-import { BugZapNotice } from '@/components/pwa/BugZapNotice';
 import { PWAClient } from '@/components/pwa/PWAClient';
 import { clerkProxyUrl } from '@/lib/hosts';
 import '../styles/globals.css';
@@ -101,7 +100,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <LenisProvider>{children}</LenisProvider>
           </ErrorBoundary>
           <PWAClient />
-          <BugZapNotice />
         </ClerkProvider>
       </body>
     </html>

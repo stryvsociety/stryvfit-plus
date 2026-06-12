@@ -249,10 +249,6 @@ html, body {
   max-width: 100% !important;
 }
 
-body:has([data-floating-install-prompt]) .bug-zap-notice {
-  bottom: calc(env(safe-area-inset-bottom) + 6.75rem);
-}
-
 @media (max-width: 640px) {
   .auth-shell {
     justify-items: start;
