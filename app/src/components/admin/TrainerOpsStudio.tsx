@@ -1149,7 +1149,10 @@ export function TrainerOpsStudio({
                   selectedClient={selected.name}
                   onAdminPlanSnapshot={setMealPlanSnapshot}
                   onOpenClientProfile={() => {
-                    selectTab('clients');
+                    const clientProfileHref = `/admin/pulse?tab=clients&client=${encodeURIComponent(selected.name)}`;
+                    setSelectedClient(selected.name);
+                    setTab('clients');
+                    window.history.pushState(null, '', clientProfileHref);
                     setClientRailOpen(true);
                   }}
                   onPlanChange={markPostPending}
@@ -1309,7 +1312,10 @@ function MealsPanel({
               <a
                 key={label}
                 href={clientProfileHref}
-                onClick={onOpenClientProfile}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onOpenClientProfile();
+                }}
                 className="admin-liquid-button min-w-20 px-3 py-2 text-right transition hover:text-[#f24f09] active:scale-[0.98]"
                 aria-label={`Open ${selectedClient} profile to update ${label.toLowerCase()}`}
               >

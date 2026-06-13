@@ -50,7 +50,7 @@ Meal prep:
 - Selected meals update cost, protein, calories, and the Pulse brief.
 - The standalone page is `/meals`.
 - Published meal plans are stored through the admin APIs and read from authenticated client meal-plan routes.
-- Client meal-change requests are stored through client APIs and reviewable from the admin client rail.
+- Client meal-change requests are stored through client APIs and reviewable from the admin client details panel.
 
 Journaling:
 
