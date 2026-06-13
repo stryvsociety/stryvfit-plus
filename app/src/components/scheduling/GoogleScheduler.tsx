@@ -33,12 +33,15 @@ import {
 } from '@/lib/bookingAvailability';
 
 const durationOptions = [30, 60];
+const SCHEDULER_TIME_ZONE = 'America/New_York';
 
 type RemoteSlot = {
   time: string;
   available: boolean;
   reason: string | null;
 };
+
+type AvailabilitySaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
 
 export type SchedulerBookingDraft = {
   serviceType: BookingServiceType;
@@ -75,15 +78,36 @@ function normalizeMobileNumber(value: string): string | null {
 
 function addMonths(date: Date, months: number): Date {
   const next = new Date(date);
-  next.setMonth(next.getMonth() + months);
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next;
+}
+
+function calendarDate(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+}
+
+function todayInSchedulerTimezone(): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: SCHEDULER_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const day = Number(parts.find((part) => part.type === 'day')?.value);
+
+  return calendarDate(year, month, day);
+}
+
+function addCalendarDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
   return next;
 }
 
 function bookableStartDate(): Date {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  today.setDate(today.getDate() + 1);
-  return today;
+  return addCalendarDays(todayInSchedulerTimezone(), 1);
 }
 
 function isBeforeBookableStart(date: Date): boolean {
@@ -95,29 +119,31 @@ function firstBookableDate(days: Date[]): Date {
 }
 
 function buildDateCycle(cycleIndex: number): { days: Date[]; label: string; eyebrow: string } {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const monthStart = addMonths(new Date(today.getFullYear(), today.getMonth(), 1), cycleIndex);
-  const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+  const today = todayInSchedulerTimezone();
+  const monthStart = addMonths(calendarDate(today.getUTCFullYear(), today.getUTCMonth() + 1, 1), cycleIndex);
+  const daysInMonth = new Date(
+    Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0, 12, 0, 0, 0)
+  ).getUTCDate();
   const days = Array.from({ length: daysInMonth }, (_, index) => {
-    const date = new Date(monthStart);
-    date.setDate(index + 1);
-    return date;
+    return calendarDate(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, index + 1);
   });
 
   return {
     days,
-    label: new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(monthStart),
+    label: new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      timeZone: 'UTC',
+      year: 'numeric',
+    }).format(monthStart),
     eyebrow: cycleIndex === 0 ? 'Current month' : 'Full month',
   };
 }
 
 function formatDay(date: Date): { weekday: string; day: string; month: string } {
   return {
-    weekday: new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date),
-    day: new Intl.DateTimeFormat('en-US', { day: '2-digit' }).format(date),
-    month: new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date),
+    weekday: new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' }).format(date),
+    day: new Intl.DateTimeFormat('en-US', { day: '2-digit', timeZone: 'UTC' }).format(date),
+    month: new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(date),
   };
 }
 
@@ -126,6 +152,7 @@ function formatFullDate(date: Date): string {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    timeZone: 'UTC',
   }).format(date);
 }
 
@@ -134,6 +161,60 @@ function formatTime(time: string): string {
   const date = new Date();
   date.setHours(hours, minutes, 0, 0);
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date);
+}
+
+function DurationToggle({
+  align = 'right',
+  onChange,
+  tone,
+  value,
+}: {
+  align?: 'left' | 'right';
+  onChange: (duration: number) => void;
+  tone: 'dark' | 'light';
+  value: number;
+}) {
+  const isLightTone = tone === 'light';
+
+  return (
+    <fieldset className={align === 'right' ? 'text-right' : 'text-left'}>
+      <legend
+        className={`font-caption text-[9px] uppercase tracking-[0.14em] ${
+          isLightTone ? 'text-[#817b72]' : 'text-text-dim'
+        }`}
+      >
+        Duration
+      </legend>
+      <div
+        className={`mt-1 inline-grid grid-cols-2 overflow-hidden rounded-full border ${
+          isLightTone ? 'border-[#dedbd4] bg-white' : 'border-border bg-bg/70'
+        }`}
+      >
+        {durationOptions.map((minutes) => {
+          const active = value === minutes;
+          return (
+            <button
+              key={minutes}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(minutes)}
+              className={`min-h-10 min-w-16 px-3 font-headline text-base uppercase leading-none transition ${
+                active
+                  ? isLightTone
+                    ? 'bg-[#151515] text-white'
+                    : 'bg-gold text-bg'
+                  : isLightTone
+                    ? 'text-[#6d675f] hover:text-[#f24f09]'
+                    : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {minutes}m
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
 }
 
 export function GoogleScheduler({
@@ -179,6 +260,8 @@ export function GoogleScheduler({
   const [remoteSlots, setRemoteSlots] = useState<RemoteSlot[] | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [availabilitySaveStatus, setAvailabilitySaveStatus] = useState<AvailabilitySaveStatus>('idle');
+  const [availabilitySaveMessage, setAvailabilitySaveMessage] = useState<string | null>(null);
   const bookingCtaLabel = serviceType === 'free' ? 'Claim Free Session' : 'Book Session';
   const requiresConsent = bookingRequiresConsent(serviceType);
   const requiresMobile = Boolean(onBookSession && !manageAvailability);
@@ -282,11 +365,33 @@ export function GoogleScheduler({
 
   async function persistAvailability(next: BookingAvailability) {
     if (!manageAvailability) return;
-    await fetch('/api/admin/booking-availability', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ availability: next }),
-    });
+    setAvailabilitySaveStatus('saving');
+    setAvailabilitySaveMessage(null);
+
+    try {
+      const response = await fetch('/api/admin/booking-availability', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ availability: next }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        availability?: unknown;
+        error?: string;
+      } | null;
+      if (!response.ok) throw new Error(payload?.error ?? 'Unable to save booking rules');
+
+      if (payload?.availability) {
+        setAvailability(parseBookingAvailability(payload.availability));
+      }
+      setAvailabilitySaveStatus('saved');
+      setAvailabilitySaveMessage('Booking rules saved.');
+      window.setTimeout(() => {
+        setAvailabilitySaveStatus((current) => (current === 'saved' ? 'idle' : current));
+      }, 2200);
+    } catch (error) {
+      setAvailabilitySaveStatus('failed');
+      setAvailabilitySaveMessage(error instanceof Error ? error.message : 'Unable to save booking rules');
+    }
   }
 
   function updateAvailability(patch: Partial<BookingAvailability>) {
@@ -388,20 +493,7 @@ export function GoogleScheduler({
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-[auto_auto_auto]">
-            <label className="px-1 py-1 text-right">
-              <p className="font-caption text-[9px] uppercase tracking-[0.14em] text-[#817b72]">Duration</p>
-              <select
-                value={selectedDuration}
-                onChange={(event) => setSelectedDuration(Number(event.target.value))}
-                className="mt-1 bg-transparent font-headline text-lg uppercase text-[#151515] outline-none"
-              >
-                {durationOptions.map((minutes) => (
-                  <option key={minutes} value={minutes}>
-                    {minutes}m
-                  </option>
-                ))}
-              </select>
-            </label>
+            <DurationToggle tone="light" value={selectedDuration} onChange={setSelectedDuration} />
             {manageAvailability ? (
               <button
                 type="button"
@@ -589,6 +681,8 @@ export function GoogleScheduler({
               <BookingAvailabilityControls
                 availability={availability}
                 durationMinutes={selectedDuration}
+                saveMessage={availabilitySaveMessage}
+                saveStatus={availabilitySaveStatus}
                 selectedDate={selectedDate}
                 selectedTime={selectedTime}
                 onChange={updateAvailability}
@@ -625,38 +719,11 @@ export function GoogleScheduler({
             Choose a block
           </h2>
         </div>
-        <label className="min-w-24 text-right">
-          <p
-            className={`font-caption text-[9px] uppercase tracking-[0.14em] ${
-              isLightTone ? 'text-[#817b72]' : 'text-text-dim'
-            }`}
-          >
-            Duration
-          </p>
-          <span className="relative mt-1 block">
-            <select
-              value={selectedDuration}
-              onChange={(event) => setSelectedDuration(Number(event.target.value))}
-              className={`min-h-10 w-full appearance-none rounded-full border py-0 pl-3 pr-9 font-headline text-lg outline-none transition focus:border-[#f24f09] ${
-                isLightTone
-                  ? 'border-[#dedbd4] bg-white text-[#151515]'
-                  : 'border-border bg-bg/70 text-text'
-              }`}
-            >
-              {durationOptions.map((minutes) => (
-                <option key={minutes} value={minutes}>
-                  {minutes}m
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 ${
-                isLightTone ? 'text-[#817b72]' : 'text-text-dim'
-              }`}
-              strokeWidth={1.8}
-            />
-          </span>
-        </label>
+        <DurationToggle
+          tone={isLightTone ? 'light' : 'dark'}
+          value={selectedDuration}
+          onChange={setSelectedDuration}
+        />
       </div>
 
       <div className="mt-6">
@@ -887,12 +954,16 @@ export function GoogleScheduler({
 function BookingAvailabilityControls({
   availability,
   durationMinutes,
+  saveMessage,
+  saveStatus,
   selectedDate,
   selectedTime,
   onChange,
 }: {
   availability: BookingAvailability;
   durationMinutes: number;
+  saveMessage: string | null;
+  saveStatus: AvailabilitySaveStatus;
   selectedDate: Date;
   selectedTime: string;
   onChange: (patch: Partial<BookingAvailability>) => void;
@@ -957,6 +1028,18 @@ function BookingAvailabilityControls({
         <div className="rounded-full border border-[#dedbd4] bg-white px-3 py-2 font-caption text-[9px] uppercase tracking-[0.12em] text-[#817b72]">
           {generatedTimes.length} starts · {weeklyStarts.length > 0 ? 'Weekly' : exactStarts.length > 0 ? 'Exact' : 'Generated'}
         </div>
+      </div>
+      <div
+        className={`mt-3 rounded-md border px-3 py-2 font-body text-xs leading-relaxed ${
+          saveStatus === 'failed'
+            ? 'border-[#f24f09]/35 bg-[#fff3ec] text-[#b83a14]'
+            : 'border-[#dedbd4] bg-white text-[#66615a]'
+        }`}
+        aria-live="polite"
+      >
+        {saveStatus === 'saving'
+          ? 'Saving booking rules...'
+          : saveMessage ?? 'Changes save automatically for the client booking calendar.'}
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
