@@ -1,5 +1,7 @@
 import { ClientPhaseFlow } from '@/components/client/ClientPhaseFlow';
 import { hasBookedFreeFirstSession, requireAppUser } from '@/lib/auth';
+import { listClientAppointmentPlans } from '@/lib/adminAppointmentPlans';
+import { listClientWorkoutRoutines } from '@/lib/adminWorkoutRoutines';
 import { parseBookingService } from '@/lib/bookingServices';
 import { FIRST_SESSION_BOOKING_PATH } from '@/lib/routes';
 import { redirect } from 'next/navigation';
@@ -18,5 +20,15 @@ export default async function BookPage({ searchParams }: BookPageProps) {
     redirect(FIRST_SESSION_BOOKING_PATH);
   }
 
-  return <ClientPhaseFlow />;
+  const [appointmentPlansResult, workoutRoutinesResult] = await Promise.allSettled([
+    listClientAppointmentPlans(appUser, 5),
+    listClientWorkoutRoutines(appUser, 5),
+  ]);
+
+  return (
+    <ClientPhaseFlow
+      appointmentPlans={appointmentPlansResult.status === 'fulfilled' ? appointmentPlansResult.value : []}
+      workoutRoutines={workoutRoutinesResult.status === 'fulfilled' ? workoutRoutinesResult.value : []}
+    />
+  );
 }

@@ -24,11 +24,22 @@ import { SignOutButton } from '@/components/auth/SignOutButton';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { ThemeToggle, usePersistedTheme } from '@/components/ui/ThemeToggle';
 import { parseBookingService, type BookingServiceType } from '@/lib/bookingServices';
+import type { AdminAppointmentPlan } from '@/lib/adminAppointmentPlans';
+import type { AdminWorkoutRoutine } from '@/lib/adminWorkoutRoutines';
 
 type Phase = 'calendar' | 'workout' | 'meal-prep' | 'journal';
 type SessionMode = 'none' | 'remote' | 'in-person';
 
-const workoutBlocks = [
+type DisplayWorkoutBlock = {
+  name: string;
+  detail: string;
+  description: string;
+  demo: string;
+  sets: string[];
+  minutes: number;
+};
+
+const workoutBlocks: DisplayWorkoutBlock[] = [
   {
     name: 'Primer',
     detail: 'Band pull-aparts, dead bugs, hip airplanes',
@@ -62,8 +73,6 @@ const workoutBlocks = [
     minutes: 6,
   },
 ];
-
-type WorkoutBlock = (typeof workoutBlocks)[number];
 
 const journalPrompts = [
   'What felt strongest today?',
@@ -105,10 +114,17 @@ function useClientQueryState(): {
   return { sessionMode: mode, daysFromDue, serviceType, bookingStatus };
 }
 
-export function ClientPhaseFlow() {
+export function ClientPhaseFlow({
+  appointmentPlans = [],
+  workoutRoutines = [],
+}: {
+  appointmentPlans?: AdminAppointmentPlan[];
+  workoutRoutines?: AdminWorkoutRoutine[];
+}) {
   const { sessionMode, daysFromDue, serviceType, bookingStatus } = useClientQueryState();
   const paymentState = useMemo(() => getPaymentState(daysFromDue), [daysFromDue]);
   const hasSession = sessionMode !== 'none';
+  const latestWorkoutRoutine = workoutRoutines[0] ?? null;
   const [phase, setPhase] = useState<Phase>('calendar');
   const [menuOpen, setMenuOpen] = useState(false);
   const [countdown, setCountdown] = useState(12);
@@ -264,10 +280,11 @@ export function ClientPhaseFlow() {
                 </p>
               </div>
             </motion.div>
-          ) : phase === 'workout' && countdown === 0 ? (
+          ) : phase === 'workout' && (countdown === 0 || latestWorkoutRoutine) ? (
             <WorkoutPhase
               key="workout"
               remote={sessionMode === 'remote'}
+              routine={latestWorkoutRoutine}
               complete={workoutComplete}
               onComplete={() => setWorkoutComplete(true)}
               onAdvance={() => handleAdvance('meal-prep')}
@@ -294,8 +311,10 @@ export function ClientPhaseFlow() {
               bookingMessage={bookingMessage}
               billingBusy={billingBusy}
               billingMessage={billingMessage}
+              appointmentPlans={appointmentPlans}
+              workoutRoutines={workoutRoutines}
               onOpenBillingPortal={openBillingPortal}
-              onPreviewWorkout={() => countdown === 0 && setPhase('workout')}
+              onPreviewWorkout={() => (countdown === 0 || latestWorkoutRoutine) && setPhase('workout')}
               onBookSession={createBooking}
             />
           )}
@@ -335,6 +354,8 @@ function CalendarOnly({
   bookingMessage,
   billingBusy,
   billingMessage,
+  appointmentPlans,
+  workoutRoutines,
   onOpenBillingPortal,
   onPreviewWorkout,
   onBookSession,
@@ -346,6 +367,8 @@ function CalendarOnly({
   bookingMessage: string | null;
   billingBusy: boolean;
   billingMessage: string | null;
+  appointmentPlans: AdminAppointmentPlan[];
+  workoutRoutines: AdminWorkoutRoutine[];
   onOpenBillingPortal: () => void;
   onPreviewWorkout: () => void;
   onBookSession: (draft: SchedulerBookingDraft) => Promise<void>;
@@ -384,7 +407,7 @@ function CalendarOnly({
               <button
                 type="button"
                 onClick={onPreviewWorkout}
-                disabled={countdown > 0}
+                disabled={countdown > 0 && workoutRoutines.length === 0}
                 className="ios-pill inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-text-muted transition hover:border-gold hover:text-gold disabled:opacity-45"
               >
                 <Dumbbell className="h-4 w-4" /> Workout
@@ -437,6 +460,11 @@ function CalendarOnly({
               <p className="mt-2 font-body text-sm leading-relaxed text-text-muted">{bookingMessage}</p>
             </div>
           ) : null}
+          <ClientPlanSummary
+            appointmentPlans={appointmentPlans}
+            workoutRoutines={workoutRoutines}
+            onOpenWorkout={onPreviewWorkout}
+          />
           <GoogleScheduler
             title={sessionTitle}
             description={sessionDescription}
@@ -452,28 +480,131 @@ function CalendarOnly({
   );
 }
 
+function formatClientDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function ClientPlanSummary({
+  appointmentPlans,
+  workoutRoutines,
+  onOpenWorkout,
+}: {
+  appointmentPlans: AdminAppointmentPlan[];
+  workoutRoutines: AdminWorkoutRoutine[];
+  onOpenWorkout: () => void;
+}) {
+  const appointmentPlan = appointmentPlans[0] ?? null;
+  const workoutRoutine = workoutRoutines[0] ?? null;
+  if (!appointmentPlan && !workoutRoutine) return null;
+
+  const appointmentDate = formatClientDate(appointmentPlan?.scheduledAt);
+
+  return (
+    <section className="mb-4 grid gap-3 md:grid-cols-2">
+      {appointmentPlan ? (
+        <article className="rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
+          <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Coach appointment plan</p>
+          <h2 className="mt-2 font-section text-3xl leading-none">{appointmentPlan.title}</h2>
+          <p className="mt-2 font-body text-sm leading-relaxed text-text-muted">{appointmentPlan.summary}</p>
+          {appointmentDate ? (
+            <p className="mt-3 font-caption text-[10px] uppercase tracking-[0.14em] text-text-dim">
+              {appointmentDate}
+              {appointmentPlan.location ? ` / ${appointmentPlan.location}` : ''}
+            </p>
+          ) : null}
+          {appointmentPlan.preparation.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {appointmentPlan.preparation.slice(0, 3).map((item) => (
+                <li key={`${appointmentPlan.id}:${item.label}`} className="font-body text-xs leading-relaxed text-text-muted">
+                  <span className="text-gold">{item.completed ? 'Done' : 'Prep'}:</span> {item.label}
+                  {item.detail ? ` - ${item.detail}` : ''}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </article>
+      ) : null}
+      {workoutRoutine ? (
+        <article className="rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
+          <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Coach workout plan</p>
+          <h2 className="mt-2 font-section text-3xl leading-none">{workoutRoutine.title}</h2>
+          <p className="mt-2 font-body text-sm leading-relaxed text-text-muted">{workoutRoutine.summary}</p>
+          {workoutRoutine.blocks.length > 0 ? (
+            <p className="mt-3 font-caption text-[10px] uppercase tracking-[0.14em] text-text-dim">
+              {workoutRoutine.blocks.length} training block{workoutRoutine.blocks.length === 1 ? '' : 's'} ready
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={onOpenWorkout}
+            className="ios-pill mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-gold px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-bg transition hover:bg-gold-deep"
+          >
+            Open workout plan <Dumbbell className="h-4 w-4" />
+          </button>
+        </article>
+      ) : null}
+    </section>
+  );
+}
+
+function blocksForRoutine(routine: AdminWorkoutRoutine | null): DisplayWorkoutBlock[] {
+  if (!routine || routine.blocks.length === 0) return workoutBlocks;
+  return routine.blocks.map((block, index) => ({
+    name: block.name,
+    detail: block.detail,
+    description: block.detail || routine.summary,
+    demo: routine.selectedExercises[index]?.name ?? routine.title,
+    sets: ['Set 1', 'Set 2', 'Set 3'],
+    minutes: 12,
+  }));
+}
+
 function WorkoutPhase({
   remote,
+  routine,
   complete,
   onComplete,
   onAdvance,
 }: {
   remote: boolean;
+  routine: AdminWorkoutRoutine | null;
   complete: boolean;
   onComplete: () => void;
   onAdvance: () => void;
 }) {
-  const [expandedBlock, setExpandedBlock] = useState(workoutBlocks[0].name);
+  const displayBlocks = useMemo(() => blocksForRoutine(routine), [routine]);
+  const [expandedBlock, setExpandedBlock] = useState(displayBlocks[0].name);
   const [setProgress, setSetProgress] = useState<Record<string, boolean[]>>(() =>
-    Object.fromEntries(workoutBlocks.map((block) => [block.name, block.sets.map(() => false)]))
+    Object.fromEntries(displayBlocks.map((block) => [block.name, block.sets.map(() => false)]))
   );
-  const activeBlock = workoutBlocks.find((block) => block.name === expandedBlock) ?? workoutBlocks[0];
+  const activeBlock = displayBlocks.find((block) => block.name === expandedBlock) ?? displayBlocks[0];
   const activeSetProgress = setProgress[activeBlock.name] ?? activeBlock.sets.map(() => false);
   const completedSets = activeSetProgress.filter(Boolean).length;
 
+  useEffect(() => {
+    if (!displayBlocks.some((block) => block.name === expandedBlock)) {
+      setExpandedBlock(displayBlocks[0].name);
+    }
+    setSetProgress((current) => {
+      const next = { ...current };
+      for (const block of displayBlocks) {
+        if (!next[block.name]) next[block.name] = block.sets.map(() => false);
+      }
+      return next;
+    });
+  }, [displayBlocks, expandedBlock]);
+
   function toggleWorkoutSet(blockName: string, setIndex: number) {
     setSetProgress((current) => {
-      const block = workoutBlocks.find((item) => item.name === blockName);
+      const block = displayBlocks.find((item) => item.name === blockName);
       const existing = current[blockName] ?? block?.sets.map(() => false) ?? [];
       return {
         ...current,
@@ -494,9 +625,12 @@ function WorkoutPhase({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">
-              {remote ? 'Live remote workout' : 'Guided workout'}
+              {routine ? 'Coach-published workout' : remote ? 'Live remote workout' : 'Guided workout'}
             </p>
-            <h1 className="mt-3 font-section text-5xl leading-none sm:text-6xl">Today&apos;s lift</h1>
+            <h1 className="mt-3 font-section text-5xl leading-none sm:text-6xl">
+              {routine ? routine.title : 'Today&apos;s lift'}
+            </h1>
+            {routine ? <p className="mt-2 font-body text-sm leading-relaxed text-text-muted">{routine.summary}</p> : null}
           </div>
           {remote ? (
             <div className="relative mt-2 flex min-w-12 justify-center pt-4">
@@ -509,7 +643,7 @@ function WorkoutPhase({
         </div>
 
         <div className="mt-7">
-          {workoutBlocks.map((block, index) => (
+          {displayBlocks.map((block, index) => (
             <motion.article
               key={block.name}
               initial={{ opacity: 0, x: -18 }}
@@ -671,18 +805,51 @@ function PhaseFrame({
 }
 
 function JournalPhase() {
+  const [entries, setEntries] = useState<Record<string, string>>({});
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('stryvfit-journal-draft');
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as { entries?: Record<string, string>; savedAt?: string };
+      setEntries(parsed.entries ?? {});
+      setSavedAt(parsed.savedAt ?? null);
+    } catch {
+      // Ignore corrupted local drafts.
+    }
+  }, []);
+
+  function updateEntry(prompt: string, value: string) {
+    setEntries((current) => ({ ...current, [prompt]: value }));
+    setSavedAt(null);
+  }
+
+  function saveJournal() {
+    const nextSavedAt = new Date().toISOString();
+    window.localStorage.setItem('stryvfit-journal-draft', JSON.stringify({ entries, savedAt: nextSavedAt }));
+    setSavedAt(nextSavedAt);
+  }
+
   return (
     <PhaseFrame
       title="Journal"
       icon={<NotebookPen className="h-5 w-5" />}
-      onAdvance={() => {}}
-      advanceLabel="Complete"
+      onAdvance={saveJournal}
+      advanceLabel="Save journal"
     >
+      {savedAt ? (
+        <p className="mb-4 rounded-md border border-gold/20 bg-surface-2 p-3 font-body text-sm text-text-muted">
+          Journal saved on this device for your next check-in.
+        </p>
+      ) : null}
       <section className="grid gap-4 rounded-md border border-border bg-surface-2 p-4 shadow-glass md:grid-cols-3">
         {journalPrompts.map((prompt) => (
           <label key={prompt} className="block rounded-md border border-border bg-bg/70 p-4">
             <span className="font-caption text-[10px] uppercase tracking-[0.14em] text-gold">{prompt}</span>
             <textarea
+              value={entries[prompt] ?? ''}
+              onChange={(event) => updateEntry(prompt, event.target.value)}
               className="mt-4 min-h-36 w-full resize-none bg-transparent font-body text-sm leading-relaxed text-text outline-none placeholder:text-text-dim"
               placeholder="Type a quick note"
             />
