@@ -383,12 +383,6 @@ export function PWAClient() {
 
   return (
     <>
-      <aside className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-4 z-[60] max-w-[calc(100vw-2rem)]">
-        <div className="rounded-[22px] border border-white/14 bg-[#111111]/90 px-4 py-2.5 font-body text-[13px] leading-none text-text shadow-[0_18px_46px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl">
-          yesterday&apos;s bugs have been zapped
-        </div>
-      </aside>
-
       {banner && !hidePromptsOnAdminSignIn && Icon ? (
         <aside className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md">
           <div className={`flex items-start gap-3 rounded-md border px-4 py-3 shadow-glass ${banner.tone}`}>
