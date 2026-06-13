@@ -39,7 +39,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - `/`: public landing page.
 - `/book`: client app phase flow. Query helpers currently include `?session=remote`, `?session=in-person`, and `?pastDueDays=7`.
 - `/meals`: standalone Ideal Nutrition meal prep picker.
-- `/notes`: client trainer notes page. Backend read/write routes exist; the visible page still needs a frontend wiring pass.
+- `/notes`: client trainer notes page backed by published trainer-note records.
 - `/coach`: iMessage CTA to the configured trainer phone.
 - `/admin/pulse`: StryvAdmin appointment and meal command center.
 - `/admin/workouts`: trainer workout builder with wger exercise library.
@@ -84,12 +84,10 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 
 - Client phase flow (`ClientPhaseFlow`) still uses URL query params for remote workout countdown demos (`?session=remote`, `?pastDueDays=7`). This is separate from the production booking flow on `/book`.
 - Subscription past-due lockout on the phase flow is not yet tied to live Stripe subscription state.
-- "Post to client" now has backend persistence at `/api/admin/publish` and authenticated client reads at `/api/client/posts`; the visible buttons remain stateful UX until a frontend wiring pass is allowed.
+- "Post to client" actions write through the admin publish APIs and authenticated client read routes for appointments, meals, workouts, and trainer notes.
 - `/admin/workouts` has backend routine persistence through `/api/admin/workout-routines`; direct multi-endpoint wger sync remains dependent on a reachable wger host plus `WGER_API_TOKEN`.
-- `/admin/pulse` has backend appointment-plan persistence through `/api/admin/appointment-plans`; visible posting still needs the frontend wiring pass.
-- `/admin/pulse?tab=meals` and `/admin/nutrition` have backend meal-plan persistence through `/api/admin/meal-plans`; visible publishing still needs the frontend wiring pass.
-- Client note and meal-plan-change requests have Supabase-backed APIs; the visible meal planner still uses the legacy local browser helper until frontend wiring is allowed.
-- Trainer notes have modern Clerk/app-user-backed APIs; the `/notes` page remains visually placeholder until frontend wiring is allowed.
+- Client note and meal-plan-change requests have Supabase-backed create/read/admin-review APIs.
+- `/notes` reads published trainer notes for the signed-in client.
 
 ## Validation Gates
 

@@ -496,6 +496,7 @@ export function TrainerOpsStudio({
   const [clientNotice, setClientNotice] = useState<string | null>(null);
   const [requests, setRequests] = useState<AdminClientRequest[]>([]);
   const [requestsError, setRequestsError] = useState<string | null>(null);
+  const [updatingRequestId, setUpdatingRequestId] = useState<string | null>(null);
   const [mealPlanSnapshot, setMealPlanSnapshot] = useState<MealPrepPlanSnapshot | null>(null);
   const baseClients = useMemo(
     () =>
@@ -791,6 +792,33 @@ export function TrainerOpsStudio({
     }
   }
 
+  async function updateRequestStatus(request: AdminClientRequest, status: 'reviewed' | 'archived') {
+    if (updatingRequestId) return;
+
+    setUpdatingRequestId(request.id);
+    setRequestsError(null);
+    setClientNotice(null);
+    try {
+      const response = await fetch('/api/admin/client-requests', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: request.id, status }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        request?: AdminClientRequest;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.request) throw new Error(payload?.error ?? 'Unable to update client request');
+
+      setRequests((current) => current.filter((item) => item.id !== request.id));
+      setClientNotice(status === 'reviewed' ? 'Client request marked reviewed.' : 'Client request archived.');
+    } catch (error) {
+      setRequestsError(error instanceof Error ? error.message : 'Unable to update client request');
+    } finally {
+      setUpdatingRequestId(null);
+    }
+  }
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('tab') === 'meals') {
@@ -1016,7 +1044,7 @@ export function TrainerOpsStudio({
                         No open client requests for this profile.
                       </p>
                     ) : (
-                      selectedRequests.slice(0, 3).map((request) => (
+                      selectedRequests.map((request) => (
                         <article key={request.id} className="rounded-md border border-[#e6e2da] bg-white p-3">
                           <p className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">
                             {request.kind === 'meal-plan-change' ? 'Meal change' : 'Trainer note'}
@@ -1024,6 +1052,26 @@ export function TrainerOpsStudio({
                           <p className="mt-1 line-clamp-3 font-body text-xs leading-relaxed text-[#6d675f]">
                             {request.message}
                           </p>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void updateRequestStatus(request, 'reviewed')}
+                              disabled={updatingRequestId === request.id}
+                              className="admin-liquid-button inline-flex min-h-9 items-center gap-2 px-0 font-caption text-[8px] uppercase tracking-[0.12em] text-[#151515] hover:text-[#f24f09] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Save className="h-3.5 w-3.5" strokeWidth={1.8} />
+                              {updatingRequestId === request.id ? 'Saving' : 'Mark reviewed'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void updateRequestStatus(request, 'archived')}
+                              disabled={updatingRequestId === request.id}
+                              className="admin-liquid-button inline-flex min-h-9 items-center gap-2 px-0 font-caption text-[8px] uppercase tracking-[0.12em] text-[#6d675f] hover:text-[#d12f1b] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+                              Archive
+                            </button>
+                          </div>
                         </article>
                       ))
                     )}

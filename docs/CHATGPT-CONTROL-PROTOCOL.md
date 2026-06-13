@@ -51,7 +51,7 @@ Expected UI controls:
 - Client selector cards on the left.
 - Top section nav: Appointments, Workouts, Meals.
 - Theme toggles on admin/client surfaces.
-- "Post to client" button. Backend persistence/read routes are `/api/admin/publish` and `/api/client/posts`; the visible button still needs a frontend wiring pass before claiming live client delivery.
+- "Post to client" button. Admin publish routes write appointment, meal, workout, and trainer-note records that authenticated clients can read from their app surfaces.
 - Support request box on admin workout surface.
 - System Health card in admin sidebars.
 

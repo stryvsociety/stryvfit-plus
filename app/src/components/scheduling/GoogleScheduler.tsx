@@ -252,7 +252,7 @@ export function GoogleScheduler({
     [availability, selectedDateKey, selectedDuration]
   );
   const [selectedTime, setSelectedTime] = useState(times[0]);
-  const [mockBooked, setMockBooked] = useState(false);
+  const [sessionBooked, setSessionBooked] = useState(false);
   const [bookingPending, setBookingPending] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [clientPhone, setClientPhone] = useState('');
@@ -277,10 +277,10 @@ export function GoogleScheduler({
     ? 'Loading Times'
     : bookingPending
       ? 'Checking Slot'
-      : mockBooked
+      : sessionBooked
         ? 'Session Booked'
         : bookingCtaLabel;
-  const bookingButtonSubtext = mockBooked
+  const bookingButtonSubtext = sessionBooked
     ? 'Confirmation started'
     : requiresMobile && !normalizedClientPhone
       ? 'Mobile required'
@@ -467,7 +467,7 @@ export function GoogleScheduler({
         description: [description, context].filter(Boolean).join('\n\n'),
         consentAcknowledged: requiresConsent ? consentAcknowledged : undefined,
       });
-      setMockBooked(true);
+      setSessionBooked(true);
     } catch (error) {
       setBookingError(error instanceof Error ? error.message : 'Booking failed');
     } finally {

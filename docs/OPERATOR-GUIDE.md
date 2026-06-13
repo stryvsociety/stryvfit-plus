@@ -49,14 +49,14 @@ Meal prep:
 - The meal prep phase lets users search/filter Ideal Nutrition meals.
 - Selected meals update cost, protein, calories, and the Pulse brief.
 - The standalone page is `/meals`.
-- Published meal plans have backend storage ready; visible meal-card delivery still needs the frontend wiring pass.
-- Client meal-change requests have backend storage ready; visible delivery still depends on the current frontend wiring pass.
+- Published meal plans are stored through the admin APIs and read from authenticated client meal-plan routes.
+- Client meal-change requests are stored through client APIs and reviewable from the admin client rail.
 
 Journaling:
 
 - The journal phase asks short reflection prompts after workout/meal prep.
 - This is currently local UI, not a complete saved journal backend.
-- Trainer notes have backend storage ready for `/notes`; visible rendering still needs the frontend wiring pass.
+- Trainer notes posted by admins render on `/notes` for the signed-in client.
 
 Payment prompts:
 
@@ -90,10 +90,10 @@ Use it to:
 - Select exercise ideas from the wger library.
 - Review the training week.
 - Schedule the workout block.
-- Use "Post to client" for current UX feedback; backend storage and client reads are ready, but visible delivery still needs a frontend wiring pass.
+- Use "Post to client" to publish the workout routine to the selected client's app account.
 - Saved workout routine data is available through backend APIs; direct wger mirroring needs the wger host and API token configured.
-- Saved appointment preparation and follow-up data is available through `/api/admin/appointment-plans` and `/api/client/appointment-plans` once frontend wiring is allowed.
-- Saved meal plan data is available through `/api/admin/meal-plans` and `/api/client/meal-plans` once frontend wiring is allowed.
+- Saved appointment preparation and follow-up data is available through `/api/admin/appointment-plans` and `/api/client/appointment-plans`.
+- Saved meal plan data is available through `/api/admin/meal-plans` and `/api/client/meal-plans`.
 
 Open `/admin/settings` for trainer-facing settings:
 
