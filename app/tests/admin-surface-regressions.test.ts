@@ -8,14 +8,30 @@ const appRoot = join(repoRoot, 'app');
 describe('admin surface regressions', () => {
   test('keeps stale browser-comment copy out of shipped source and operator docs', () => {
     const offenders = scanFiles([join(appRoot, 'src'), join(repoRoot, 'docs'), join(appRoot, 'README.md')], [
-      /yesterday'?s bugs have been zapped/i,
-      /bugs have been zapped/i,
       /Nutrition Command/i,
       /CLIENT RAIL/i,
       /Client CRM/i,
     ]);
 
     expect(offenders).toEqual([]);
+  });
+
+  test('keeps the required daily bug-zap notice visible with exact copy', () => {
+    const source = readFileSync(join(appRoot, 'src/components/pwa/PWAClient.tsx'), 'utf8');
+
+    expect(source).toContain('data-testid="bug-zap-notice"');
+    expect(source).toContain('yesterday&apos;s bugs have been zapped');
+    expect(source).toContain('bottom-[calc(1rem+env(safe-area-inset-bottom))]');
+    expect(source).toContain('rounded-[18px]');
+  });
+
+  test('retries transient Clerk asset probe failures before filing incidents', () => {
+    const source = readFileSync(join(appRoot, 'src/components/pwa/PWAClient.tsx'), 'utf8');
+
+    expect(source).toContain('CLERK_ASSET_REACHABILITY_ATTEMPTS = 3');
+    expect(source).toContain('CLERK_ASSET_REACHABILITY_RETRY_MS = 750');
+    expect(source).toContain("probeUrl.searchParams.set('_stryv_clerk_probe'");
+    expect(source).toContain('await delay(CLERK_ASSET_REACHABILITY_RETRY_MS)');
   });
 
   test('redirects the retired nutrition workspace into the live meals tab', () => {

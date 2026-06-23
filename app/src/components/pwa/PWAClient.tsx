@@ -16,6 +16,8 @@ const OPTIONAL_SERVICE_WORKER_ERRORS = [
   /only secure origins/i,
 ];
 const CLERK_ASSET_URL_PATTERN = /(https?:\/\/[^\s)]+\/__clerk\/npm\/[^\s)]+)/i;
+const CLERK_ASSET_REACHABILITY_ATTEMPTS = 3;
+const CLERK_ASSET_REACHABILITY_RETRY_MS = 750;
 
 function eventLoadMessage(event: Event): string | null {
   const target = event.target;
@@ -75,7 +77,17 @@ function isClerkChunkOrAssetError(message: string): boolean {
   return /loading chunk \d+ failed/i.test(message) || /script .*\/__clerk\/npm\/.* load failed/i.test(message);
 }
 
-async function clerkAssetIsReachable(url: URL): Promise<boolean> {
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function cacheBustClerkAssetUrl(url: URL, attempt: number): URL {
+  const probeUrl = new URL(url.href);
+  probeUrl.searchParams.set('_stryv_clerk_probe', `${Date.now()}-${attempt}`);
+  return probeUrl;
+}
+
+async function clerkAssetIsReachableOnce(url: URL): Promise<boolean> {
   try {
     const head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
     if (head.ok) return true;
@@ -89,6 +101,19 @@ async function clerkAssetIsReachable(url: URL): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function clerkAssetIsReachable(url: URL): Promise<boolean> {
+  for (let attempt = 0; attempt < CLERK_ASSET_REACHABILITY_ATTEMPTS; attempt += 1) {
+    const probeUrl = attempt === 0 ? url : cacheBustClerkAssetUrl(url, attempt);
+    if (await clerkAssetIsReachableOnce(probeUrl)) return true;
+
+    if (attempt < CLERK_ASSET_REACHABILITY_ATTEMPTS - 1) {
+      await delay(CLERK_ASSET_REACHABILITY_RETRY_MS);
+    }
+  }
+
+  return false;
 }
 
 function canRegisterServiceWorker(): boolean {
@@ -383,6 +408,12 @@ export function PWAClient() {
 
   return (
     <>
+      <aside
+        data-testid="bug-zap-notice"
+        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-3 z-40 rounded-[18px] border border-white/15 bg-black/70 px-3.5 py-2 font-body text-[11px] leading-none text-white shadow-[0_12px_30px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+      >
+        yesterday&apos;s bugs have been zapped
+      </aside>
       {banner && !hidePromptsOnAdminSignIn && Icon ? (
         <aside className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md">
           <div className={`flex items-start gap-3 rounded-md border px-4 py-3 shadow-glass ${banner.tone}`}>
