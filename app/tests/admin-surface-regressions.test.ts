@@ -81,6 +81,70 @@ describe('admin surface regressions', () => {
     expect(source).toContain('onMouseEnter={scheduleSidebarExpand}');
     expect(source).toContain('data-testid="admin-sidebar-toggle"');
   });
+
+  test('keeps the client billing recovery loop wired to live Stripe and PWA actions', () => {
+    const clientSource = readFileSync(join(appRoot, 'src/components/client/ClientPhaseFlow.tsx'), 'utf8');
+    const workerSource = readFileSync(join(appRoot, 'public/sw.js'), 'utf8');
+
+    expect(existsSync(join(appRoot, 'src/app/api/billing/summary/route.ts'))).toBe(true);
+    expect(existsSync(join(appRoot, 'src/app/api/billing/retry/route.ts'))).toBe(true);
+    expect(existsSync(join(appRoot, 'src/app/api/pwa/push-subscription/route.ts'))).toBe(true);
+    expect(clientSource).toContain("fetch('/api/billing/summary'");
+    expect(clientSource).toContain("fetch('/api/billing/retry'");
+    expect(clientSource).toContain('disabled={billingBusy}');
+    expect(clientSource).toContain('Enable billing alerts');
+    expect(clientSource).toContain('Update Billing');
+    expect(clientSource).toContain('Retry');
+    expect(clientSource).not.toContain('pastDueDays');
+    expect(workerSource).toContain("action: 'update-billing', title: 'Update Billing'");
+    expect(workerSource).toContain("action: 'retry-payment', title: 'Retry'");
+  });
+
+  test('keeps intake-requested booking and sign-in fixes visible', () => {
+    const schedulerSource = readFileSync(join(appRoot, 'src/components/scheduling/GoogleScheduler.tsx'), 'utf8');
+    const billingSource = readFileSync(join(appRoot, 'src/lib/billing.ts'), 'utf8');
+    const signInSource = readFileSync(join(appRoot, 'src/app/sign-in/[[...sign-in]]/page.tsx'), 'utf8');
+
+    expect(schedulerSource).toContain('All sessions must be cancelled or rescheduled at least 24 hours in advance.');
+    expect(billingSource).toContain("label: 'Credit/debit card'");
+    expect(signInSource).toContain("card: 'mx-auto w-full'");
+    expect(signInSource).toContain("rootBox: 'mx-auto w-full'");
+  });
+
+  test('keeps SSF-42 client account management wired to Clerk, billing, and cancellation APIs', () => {
+    const accountSource = readFileSync(join(appRoot, 'src/components/client/ClientAccountPage.tsx'), 'utf8');
+    const tabSource = readFileSync(join(appRoot, 'src/components/layout/TabBar.tsx'), 'utf8');
+
+    expect(existsSync(join(appRoot, 'src/app/account/page.tsx'))).toBe(true);
+    expect(existsSync(join(appRoot, 'src/app/api/client/profile/route.ts'))).toBe(true);
+    expect(existsSync(join(appRoot, 'src/app/api/client/bookings/[id]/route.ts'))).toBe(true);
+    expect(accountSource).toContain('openUserProfile');
+    expect(accountSource).toContain("fetch('/api/client/profile'");
+    expect(accountSource).toContain("fetch('/api/billing/portal'");
+    expect(accountSource).toContain("fetch(`/api/client/bookings/${booking.id}`");
+    expect(accountSource).toContain('Use Late Cancel');
+    expect(tabSource).toContain("{ href: '/account', label: 'Account'");
+    expect(tabSource).toContain('grid grid-cols-5');
+  });
+
+  test('keeps SSF-42 admin scheduling and profile editing on real app APIs', () => {
+    const adminSource = readFileSync(join(appRoot, 'src/components/admin/TrainerOpsStudio.tsx'), 'utf8');
+    const schedulerSource = readFileSync(join(appRoot, 'src/components/scheduling/GoogleScheduler.tsx'), 'utf8');
+    const bookingsSource = readFileSync(join(appRoot, 'src/lib/bookings.ts'), 'utf8');
+
+    expect(existsSync(join(appRoot, 'src/app/api/admin/bookings/route.ts'))).toBe(true);
+    expect(existsSync(join(appRoot, 'src/app/api/admin/clients/[id]/route.ts'))).toBe(true);
+    expect(adminSource).toContain("fetch('/api/admin/bookings'");
+    expect(adminSource).toContain("fetch(`/api/admin/clients/${client.id}`");
+    expect(adminSource).toContain('Creates a StryvFit booking row and a Google Calendar event every time.');
+    expect(adminSource).toContain('ClientProfileEditor');
+    expect(schedulerSource).toContain('Schedule selected client');
+    expect(schedulerSource).toContain('future only');
+    expect(schedulerSource).toContain('Remove future repeating');
+    expect(bookingsSource).toContain('Google Calendar event could not be created. No appointment was saved.');
+    expect(bookingsSource).toContain('updateCalendarEvent(row.google_event_id');
+    expect(bookingsSource).toContain('if (!result.ok) throw new Error(result.reason);');
+  });
 });
 
 function scanFiles(paths: string[], patterns: RegExp[]) {

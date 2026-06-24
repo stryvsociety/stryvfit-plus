@@ -27,7 +27,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 
 ## Current State Snapshot
 
-- `app/src/components/client/ClientPhaseFlow.tsx`: client full-screen phase flow, URL-driven session/payment demos, theme toggle, floating menu, workout, meal prep, journal, payment modal.
+- `app/src/components/client/ClientPhaseFlow.tsx`: client full-screen phase flow, URL-driven session demos, live Stripe billing panel, recovery toast, theme toggle, floating menu, workout, meal prep, journal, payment modal.
 - `app/src/components/admin/TrainerOpsStudio.tsx`: appointment and meal command center for StryvAdmin.
 - `app/src/components/admin/AdminWorkoutsPage.tsx`: workout builder, client selector, wger exercise library, training week, remote video notes, support chat, schedule timeline.
 - `app/src/components/admin/AdminSupportChat.tsx`: admin support request form that posts incidents into the Solvys support pipeline.
@@ -37,7 +37,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 ## Routes
 
 - `/`: public landing page.
-- `/book`: client app phase flow. Query helpers currently include `?session=remote`, `?session=in-person`, and `?pastDueDays=7`.
+- `/book`: client app phase flow. Query helpers currently include `?session=remote`, `?session=in-person`, `?billing=update`, and `?billing=retry`.
 - `/meals`: standalone Ideal Nutrition meal prep picker.
 - `/notes`: client trainer notes page backed by published trainer-note records.
 - `/coach`: iMessage CTA to the configured trainer phone.
@@ -63,7 +63,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 ## Runtime Dependencies
 
 - Supabase: auth, app settings, support incidents, update records, future client data.
-- Stripe: subscription/payment state; currently not fully wired into the client phase gate.
+- Stripe: subscription/payment state, Billing Portal, invoice retry, and billing recovery state for the client phase gate.
 - Google Calendar handoff: local themed scheduler creates Google Calendar event URLs.
 - Ideal Nutrition Browserbase ingestion: meal data source through `BROWSERBASE_API_KEY`, with fallback behavior in code.
 - Linear: Solvys support issue filing from incidents.
@@ -73,7 +73,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 ## Production Booking And Payments (2026-06-01)
 
 - `/book` + `/api/bookings/checkout` + `/api/bookings/availability` — live on Cloudflare Worker `stryvfit-plus` (Ashley account).
-- Stripe Checkout + webhook at `/api/stripe/webhook` — confirms paid bookings and Google Calendar events.
+- Stripe Checkout + webhook at `/api/stripe/webhook` — confirms paid bookings, syncs subscription status, and triggers billing recovery notices.
 - Booking consent form is required in the `/book` scheduler before session bookings; the form URL defaults to the provided Google Form and can be overridden with `NEXT_PUBLIC_BOOKING_CONSENT_FORM_URL`.
 - Google Calendar failures no longer block booking confirmation; the app confirms the Supabase booking and files a support incident for calendar follow-up.
 - Trainer availability persisted in Supabase; admin PUT `/api/admin/booking-availability`.
@@ -82,8 +82,8 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 
 ## Known Simulation And Pending Wiring
 
-- Client phase flow (`ClientPhaseFlow`) still uses URL query params for remote workout countdown demos (`?session=remote`, `?pastDueDays=7`). This is separate from the production booking flow on `/book`.
-- Subscription past-due lockout on the phase flow is not yet tied to live Stripe subscription state.
+- Client phase flow (`ClientPhaseFlow`) still uses URL query params for remote workout countdown demos (`?session=remote`). Billing is live Stripe state via `/api/billing/summary`, `/api/billing/retry`, Billing Portal, and webhook-driven recovery notices.
+- Cash App Pay and PayPal are set to `on` in Stripe payment method preferences but still report unavailable in Ashley's live Stripe account until Stripe Dashboard activation/approval is complete. Apple Pay is active.
 - "Post to client" actions write through the admin publish APIs and authenticated client read routes for appointments, meals, workouts, and trainer notes.
 - `/admin/workouts` has backend routine persistence through `/api/admin/workout-routines`; direct multi-endpoint wger sync remains dependent on a reachable wger host plus `WGER_API_TOKEN`.
 - Client note and meal-plan-change requests have Supabase-backed create/read/admin-review APIs.

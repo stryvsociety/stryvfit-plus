@@ -2,6 +2,7 @@ import { createClerkClient, verifyToken } from '@clerk/nextjs/server';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { NextResponse } from 'next/server';
+import { FIRST_SESSION_OFFER_CONSUMING_STATUSES } from '@/lib/clientLifecycle';
 import { serviceClient } from '@/lib/supabase';
 import { ADMIN_SIGN_IN_PATH, FIRST_SESSION_BOOKING_PATH } from '@/lib/routes';
 
@@ -15,6 +16,11 @@ export type AppUser = {
   phone: string | null;
   role: AppRole;
   stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  subscription_status: string | null;
+  profile_goal: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
 };
 
 const ADMIN_EMAIL_DOMAIN = 'stryvsocietyfit.com';
@@ -122,7 +128,9 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.data.id)
-      .select('id, clerk_user_id, email, full_name, phone, role, stripe_customer_id')
+      .select(
+        'id, clerk_user_id, email, full_name, phone, role, stripe_customer_id, stripe_subscription_id, subscription_status, profile_goal, emergency_contact_name, emergency_contact_phone'
+      )
       .single();
 
     if (error) throw error;
@@ -142,7 +150,9 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
       },
       { onConflict: 'clerk_user_id' }
     )
-    .select('id, clerk_user_id, email, full_name, phone, role, stripe_customer_id')
+    .select(
+      'id, clerk_user_id, email, full_name, phone, role, stripe_customer_id, stripe_subscription_id, subscription_status, profile_goal, emergency_contact_name, emergency_contact_phone'
+    )
     .single();
 
   if (error) throw error;
@@ -156,13 +166,12 @@ export async function requireAppUser(): Promise<AppUser> {
 }
 
 export async function hasBookedFreeFirstSession(appUser: AppUser): Promise<boolean> {
-  const activeBookingStatuses = ['held', 'pending_payment', 'confirmed', 'rescheduled', 'completed'];
   const { data, error } = await serviceClient()
     .from('bookings')
     .select('id')
     .eq('app_user_id', appUser.id)
     .eq('service_type', 'free')
-    .in('status', activeBookingStatuses)
+    .in('status', [...FIRST_SESSION_OFFER_CONSUMING_STATUSES])
     .limit(1);
 
   if (error) throw error;
@@ -172,7 +181,7 @@ export async function hasBookedFreeFirstSession(appUser: AppUser): Promise<boole
     .from('bookings')
     .select('id')
     .eq('client_email', appUser.email)
-    .in('status', activeBookingStatuses)
+    .in('status', [...FIRST_SESSION_OFFER_CONSUMING_STATUSES])
     .limit(1);
 
   if (existingClientBooking.error) throw existingClientBooking.error;

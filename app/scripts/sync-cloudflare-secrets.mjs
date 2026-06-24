@@ -35,7 +35,7 @@ if (!env.CLOUDFLARE_API_TOKEN) {
   process.exit(1);
 }
 
-const skip = new Set(['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID']);
+const skip = new Set(['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'STRIPE_ADMIN_SECRET_KEY']);
 /** Plaintext in wrangler.jsonc `vars` — must not also be Worker secrets (API error 10053). */
 const wranglerVars = new Set([
   'NEXT_PUBLIC_APP_URL',

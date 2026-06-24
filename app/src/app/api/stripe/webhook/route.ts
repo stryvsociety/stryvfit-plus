@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { confirmBookingFromStripe, ensureGoogleEvent, expireBookingForStripeSession } from '@/lib/bookings';
 import { syncStripeSubscriptionBilling } from '@/lib/billing';
+import { billingNoticeReasonForSubscription, sendBillingRecoveryNotice } from '@/lib/billingNotifications';
 import { serviceClient } from '@/lib/supabase';
 import { stripe } from '@/lib/stripeClient';
 
 export const runtime = 'nodejs';
+
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const subscription = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }).subscription;
+  if (!subscription) return null;
+  return typeof subscription === 'string' ? subscription : subscription.id;
+}
 
 async function recordStripeEvent(event: Stripe.Event): Promise<boolean> {
   const sb = serviceClient();
@@ -57,6 +64,37 @@ export async function POST(req: Request) {
   if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
     const subscription = event.data.object as Stripe.Subscription;
     await syncStripeSubscriptionBilling(subscription);
+    const reason = event.type === 'customer.subscription.deleted'
+      ? 'subscription_canceled'
+      : billingNoticeReasonForSubscription(subscription.status);
+    if (reason) {
+      await sendBillingRecoveryNotice({
+        eventId: event.id,
+        reason,
+        customerId: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id,
+        subscriptionId: subscription.id,
+      }).catch(() => null);
+    }
+  }
+
+  if (event.type === 'invoice.payment_failed' || event.type === 'invoice.payment_action_required') {
+    const invoice = event.data.object as Stripe.Invoice;
+    await sendBillingRecoveryNotice({
+      eventId: event.id,
+      reason: event.type === 'invoice.payment_action_required' ? 'payment_action_required' : 'payment_failed',
+      customerId: typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id ?? null,
+      subscriptionId: invoiceSubscriptionId(invoice),
+      invoice,
+    }).catch(() => null);
+  }
+
+  if (event.type === 'invoice.paid') {
+    const invoice = event.data.object as Stripe.Invoice;
+    const subscriptionId = invoiceSubscriptionId(invoice);
+    if (subscriptionId) {
+      const latest = await stripe().subscriptions.retrieve(subscriptionId);
+      await syncStripeSubscriptionBilling(latest);
+    }
   }
 
   return NextResponse.json({ ok: true });

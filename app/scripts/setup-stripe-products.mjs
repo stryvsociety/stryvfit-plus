@@ -2,15 +2,17 @@
 /**
  * One-shot Stripe product/price provisioner for StryvFit+.
  *
- * Creates the products and prices the booking flow expects, then prints the
- * NEXT_PUBLIC_STRIPE_PRICE_* values to paste into Cloudflare Worker secrets.
+ * Creates the products and prices the booking flow expects, verifies the Stripe
+ * Billing Portal + webhook setup, then prints the NEXT_PUBLIC_STRIPE_PRICE_*
+ * values to paste into Cloudflare Worker secrets.
  *
  * Safe to re-run: products are matched by metadata.stryv_service and prices by
  * lookup_key, so a second run reuses existing objects instead of duplicating.
  *
- * Reads STRIPE_SECRET_KEY (and any already-set price IDs) from .env.local, or
- * from the environment. Prices already present in .env.local are reused, so it
- * only creates what is missing (e.g. the online-coaching subscriptions).
+ * Reads STRIPE_ADMIN_SECRET_KEY or STRIPE_SECRET_KEY (and any already-set price
+ * IDs) from .env.local, or from the environment. Prices already present in
+ * .env.local are reused, so it only creates what is missing (e.g. the
+ * online-coaching subscriptions).
  *
  * Meal prep is intentionally excluded — it is recommend-only (Ideal Nutrition
  * affiliate links) and the planning session is free.
@@ -41,15 +43,32 @@ function loadEnvLocal() {
 const fileEnv = loadEnvLocal();
 const env = { ...fileEnv, ...process.env };
 
-const secretKey = env.STRIPE_SECRET_KEY;
+const secretKey = env.STRIPE_ADMIN_SECRET_KEY || env.STRIPE_SECRET_KEY;
 if (!secretKey) {
-  console.error('Missing STRIPE_SECRET_KEY (checked .env.local and environment).');
+  console.error('Missing STRIPE_ADMIN_SECRET_KEY or STRIPE_SECRET_KEY (checked .env.local and environment).');
   process.exit(1);
 }
 
 const currency = (env.STRIPE_CURRENCY ?? 'usd').toLowerCase();
-const liveMode = secretKey.startsWith('sk_live_');
+const mode = secretKey.includes('_live_') ? 'LIVE' : secretKey.includes('_test_') ? 'TEST' : 'UNKNOWN';
 const stripe = new Stripe(secretKey, { apiVersion: '2026-05-27.dahlia' });
+const appOrigin = (env.NEXT_PUBLIC_APP_URL ?? 'https://app.stryvsocietyfit.com').replace(/\/$/, '');
+const publicOrigin = (env.NEXT_PUBLIC_PUBLIC_URL ?? 'https://stryvsocietyfit.com').replace(/\/$/, '');
+const webhookUrl = `${appOrigin}/api/stripe/webhook`;
+const REQUIRED_WEBHOOK_EVENTS = [
+  'checkout.session.completed',
+  'checkout.session.expired',
+  'customer.subscription.updated',
+  'customer.subscription.deleted',
+  'invoice.payment_failed',
+  'invoice.payment_action_required',
+  'invoice.paid',
+];
+const REQUIRED_PAYMENT_METHODS = [
+  { key: 'apple_pay', label: 'Apple Pay', env: 'STRIPE_ACCEPTS_APPLE_PAY' },
+  { key: 'cashapp', label: 'Cash App Pay', env: 'STRIPE_ACCEPTS_CASH_APP_PAY' },
+  { key: 'paypal', label: 'PayPal', env: 'STRIPE_ACCEPTS_PAYPAL' },
+];
 
 /**
  * Each entry maps a code service type -> Stripe product + price.
@@ -146,11 +165,113 @@ async function findOrCreatePrice(item, productId) {
   return { price, created: true };
 }
 
+async function ensureBillingPortal(priceIdsByService) {
+  const subscriptionPriceIds = CATALOG.filter((item) => item.interval).map((item) => priceIdsByService.get(item.service));
+  const productsById = new Map();
+
+  for (const priceId of subscriptionPriceIds) {
+    const price = await stripe.prices.retrieve(priceId);
+    const product = typeof price.product === 'string' ? price.product : price.product.id;
+    productsById.set(product, [...(productsById.get(product) ?? []), price.id]);
+  }
+
+  const products = Array.from(productsById, ([product, prices]) => ({ product, prices }));
+  const features = {
+    customer_update: {
+      enabled: true,
+      allowed_updates: ['name', 'email', 'phone', 'address'],
+    },
+    invoice_history: { enabled: true },
+    payment_method_update: { enabled: true },
+    subscription_cancel: {
+      enabled: true,
+      mode: 'at_period_end',
+      cancellation_reason: {
+        enabled: true,
+        options: ['too_expensive', 'missing_features', 'switched_service', 'unused', 'other'],
+      },
+    },
+    subscription_update: {
+      enabled: true,
+      default_allowed_updates: ['price'],
+      proration_behavior: 'create_prorations',
+      products,
+    },
+  };
+  const payload = {
+    name: 'StryvFit+ Billing Portal',
+    default_return_url: `${appOrigin}/book`,
+    business_profile: {
+      headline: 'Manage your StryvFit+ billing',
+      privacy_policy_url: `${publicOrigin}/privacy`,
+      terms_of_service_url: `${publicOrigin}/terms`,
+    },
+    features,
+    metadata: {
+      stryvfit_portal: 'primary',
+      managed_by: 'codex',
+    },
+  };
+
+  const configurations = await stripe.billingPortal.configurations.list({ limit: 10, active: true });
+  const existing = configurations.data.find((item) => item.metadata?.stryvfit_portal === 'primary') ?? configurations.data[0];
+  if (existing) {
+    const updated = await stripe.billingPortal.configurations.update(existing.id, payload);
+    return { configuration: updated, created: false };
+  }
+
+  const configuration = await stripe.billingPortal.configurations.create(payload);
+  return { configuration, created: true };
+}
+
+async function ensureWebhookEvents() {
+  const endpoints = await stripe.webhookEndpoints.list({ limit: 100 });
+  const endpoint = endpoints.data.find((item) => item.url === webhookUrl);
+  if (!endpoint) return { endpoint: null, missing: REQUIRED_WEBHOOK_EVENTS };
+
+  const enabled = Array.from(new Set([...endpoint.enabled_events, ...REQUIRED_WEBHOOK_EVENTS])).filter(
+    (event) => event !== '*'
+  );
+  const missing = REQUIRED_WEBHOOK_EVENTS.filter((event) => !endpoint.enabled_events.includes(event));
+  if (missing.length === 0 || endpoint.enabled_events.includes('*')) {
+    return { endpoint, missing: [] };
+  }
+
+  const updated = await stripe.webhookEndpoints.update(endpoint.id, { enabled_events: enabled });
+  return { endpoint: updated, missing };
+}
+
+async function ensurePaymentMethodPreferences() {
+  const configurations = await stripe.paymentMethodConfigurations.list({ limit: 1 });
+  const config = configurations.data[0];
+  if (!config) return [];
+
+  let current = config;
+  for (const method of REQUIRED_PAYMENT_METHODS) {
+    if (method.key === 'apple_pay') continue;
+    try {
+      current = await stripe.paymentMethodConfigurations.update(current.id, {
+        [method.key]: { display_preference: { preference: 'on' } },
+      });
+    } catch {
+      // Keep auditing below; some methods require manual approval or are not
+      // available for the account region.
+    }
+  }
+
+  return REQUIRED_PAYMENT_METHODS.map((method) => ({
+    ...method,
+    available: current[method.key]?.available === true,
+    preference: current[method.key]?.display_preference?.preference ?? 'unknown',
+  }));
+}
+
 async function main() {
-  console.log(`\nStripe mode: ${liveMode ? 'LIVE' : 'TEST'}  |  currency: ${currency.toUpperCase()}`);
+  console.log(`\nStripe mode: ${mode}  |  currency: ${currency.toUpperCase()}`);
   console.log('Provisioning StryvFit+ products and prices...\n');
 
   const envLines = [];
+  const priceIdsByService = new Map();
 
   for (const item of CATALOG) {
     // Reuse a price already configured in .env.local if it still exists & is active.
@@ -161,6 +282,7 @@ async function main() {
         if (existing.active) {
           console.log(`${item.service.padEnd(26)} ${`${formatAmount(existing.unit_amount)}`.padEnd(18)} price ${existing.id} (reused from .env.local)`);
           envLines.push(`${item.envVar}=${existing.id}`);
+          priceIdsByService.set(item.service, existing.id);
           continue;
         }
       } catch {
@@ -178,6 +300,35 @@ async function main() {
         `price ${price.id} (${priceCreated ? 'created' : 'reused'})`
     );
     envLines.push(`${item.envVar}=${price.id}`);
+    priceIdsByService.set(item.service, price.id);
+  }
+
+  const { configuration, created } = await ensureBillingPortal(priceIdsByService);
+  console.log(`\nbilling_portal            configuration ${configuration.id} (${created ? 'created' : 'updated/reused'})`);
+
+  const webhook = await ensureWebhookEvents();
+  if (webhook.endpoint) {
+    const status = webhook.missing.length === 0 ? 'already covered' : `added ${webhook.missing.join(', ')}`;
+    console.log(`stripe_webhook            endpoint ${webhook.endpoint.id} (${status})`);
+  } else {
+    console.log(`stripe_webhook            missing endpoint ${webhookUrl}`);
+    console.log('Create it in Stripe Dashboard, then store the new signing secret as STRIPE_WEBHOOK_SECRET.');
+  }
+
+  const paymentMethods = await ensurePaymentMethodPreferences();
+  for (const method of paymentMethods) {
+    console.log(
+      `payment_method            ${method.label.padEnd(13)} available=${method.available} preference=${method.preference}`
+    );
+    envLines.push(`${method.env}=${method.available ? 'true' : 'false'}`);
+  }
+  const unavailable = paymentMethods.filter((method) => !method.available);
+  if (unavailable.length > 0) {
+    console.log(
+      `payment_method_attention  Activate/approve in Stripe Dashboard: ${unavailable
+        .map((method) => method.label)
+        .join(', ')}`
+    );
   }
 
   console.log('\n--- Add these to .env / Cloudflare Worker secrets ---\n');

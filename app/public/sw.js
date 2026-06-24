@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v28';
+const CACHE_VERSION = 'v29';
 const STATIC_CACHE = `stryvfit-static-${CACHE_VERSION}`;
 const PAGE_CACHE = `stryvfit-pages-${CACHE_VERSION}`;
 const CORE_ROUTES = ['/', '/book', '/notes', '/meals', '/coach', '/admin/pulse'];
@@ -43,6 +43,46 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+});
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data?.json() ?? {};
+  } catch {
+    payload = { title: 'Payment needs attention', body: event.data?.text() };
+  }
+
+  const title = payload.title || 'Payment needs attention';
+  const updateUrl = payload.url || '/book?billing=update';
+  const retryUrl = payload.retryUrl || '/book?billing=retry';
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body:
+        payload.body ||
+        'Update billing or retry your StryvFit+ subscription payment to keep booking.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: 'stryvfit-billing',
+      renotify: true,
+      data: { updateUrl, retryUrl },
+      actions: [
+        { action: 'update-billing', title: 'Update Billing' },
+        { action: 'retry-payment', title: 'Retry' },
+      ],
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl =
+    event.action === 'retry-payment'
+      ? event.notification.data?.retryUrl
+      : event.notification.data?.updateUrl || '/book?billing=update';
+
+  event.waitUntil(openOrFocusClient(targetUrl));
 });
 
 self.addEventListener('fetch', (event) => {
@@ -104,4 +144,16 @@ async function staleWhileRevalidate(request) {
     .catch(() => cached);
 
   return cached || fetchPromise;
+}
+
+async function openOrFocusClient(targetUrl) {
+  const target = new URL(targetUrl || '/book', self.location.origin).href;
+  const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const client of clientList) {
+    if ('focus' in client) {
+      await client.focus();
+      return client.navigate(target);
+    }
+  }
+  return self.clients.openWindow(target);
 }

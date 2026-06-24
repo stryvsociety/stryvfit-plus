@@ -13,6 +13,7 @@ import {
   Plus,
   ShieldCheck,
   SlidersHorizontal,
+  Trash2,
   Unlock,
   X,
 } from 'lucide-react';
@@ -264,6 +265,7 @@ export function GoogleScheduler({
   const [availabilitySaveMessage, setAvailabilitySaveMessage] = useState<string | null>(null);
   const bookingCtaLabel = serviceType === 'free' ? 'Claim Free Session' : 'Book Session';
   const requiresConsent = bookingRequiresConsent(serviceType);
+  const requiresConsentAcknowledgement = requiresConsent && !manageAvailability;
   const requiresMobile = Boolean(onBookSession && !manageAvailability);
   const isLightTone = tone === 'light';
   const normalizedClientPhone = normalizeMobileNumber(clientPhone);
@@ -284,7 +286,7 @@ export function GoogleScheduler({
     ? 'Confirmation started'
     : requiresMobile && !normalizedClientPhone
       ? 'Mobile required'
-    : requiresConsent && !consentAcknowledged
+    : requiresConsentAcknowledgement && !consentAcknowledged
       ? 'Consent required'
       : serviceType === 'free'
         ? 'No card required'
@@ -443,7 +445,7 @@ export function GoogleScheduler({
       setBookingError('Enter a mobile number before booking.');
       return;
     }
-    if (requiresConsent && !consentAcknowledged) {
+    if (requiresConsentAcknowledgement && !consentAcknowledged) {
       setBookingError('Open the consent form and acknowledge it before booking.');
       return;
     }
@@ -649,6 +651,21 @@ export function GoogleScheduler({
               <p className="mt-2 font-body text-sm font-semibold text-[#151515]">{title}</p>
               <p className="mt-1 font-body text-xs leading-relaxed text-[#66615a]">{description}</p>
             </div>
+            {onBookSession ? (
+              <button
+                type="button"
+                onClick={() => void bookSelectedSession()}
+                disabled={bookingPending || slotsLoading}
+                className="ios-pill mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[#f24f09] px-4 font-caption text-[10px] uppercase tracking-[0.13em] text-white transition hover:bg-[#bf3612] disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                {sessionBooked ? 'Scheduled' : bookingPending ? 'Scheduling' : 'Schedule selected client'}
+              </button>
+            ) : null}
+            {bookingError ? (
+              <p className="mt-2 rounded-md border border-[#f24f09]/35 bg-[#fff3ec] p-2 font-body text-xs leading-relaxed text-[#b83a14]">
+                {bookingError}
+              </p>
+            ) : null}
           </aside>
         </div>
         <AnimatePresence>
@@ -718,6 +735,11 @@ export function GoogleScheduler({
           >
             Choose a block
           </h2>
+          {onBookSession ? (
+            <p className={`mt-2 max-w-xl font-body text-xs leading-relaxed ${isLightTone ? 'text-[#66615a]' : 'text-text-muted'}`}>
+              All sessions must be cancelled or rescheduled at least 24 hours in advance.
+            </p>
+          ) : null}
         </div>
         <DurationToggle
           tone={isLightTone ? 'light' : 'dark'}
@@ -913,7 +935,7 @@ export function GoogleScheduler({
           disabled={
             bookingPending ||
             slotsLoading ||
-            (requiresConsent && !consentAcknowledged) ||
+            (requiresConsentAcknowledgement && !consentAcknowledged) ||
             (requiresMobile && !normalizedClientPhone)
           }
           className="ios-pill mt-5 inline-flex min-h-14 w-full flex-col items-center justify-center rounded-full bg-gold px-4 text-bg transition-colors hover:bg-gold-deep disabled:cursor-not-allowed disabled:opacity-55"
@@ -1088,7 +1110,8 @@ function BookingAvailabilityControls({
             <div>
               <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Exact starts</p>
               <p className="mt-1 font-body text-xs text-[#66615a]">
-                Trainer-approved starts for this calendar.
+                Trainer-approved starts for this calendar. Removing a repeating start changes future booking
+                availability only.
               </p>
             </div>
             <div className="flex w-full gap-2 sm:w-auto">
@@ -1151,16 +1174,16 @@ function BookingAvailabilityControls({
                     {formatTime(time)}
                   </span>
                   <span className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
-                    Repeats {repeatDayLabel}
+                    Repeats {repeatDayLabel} · future only
                   </span>
                 </span>
                 <button
                   type="button"
                   onClick={() => removeWeeklyStart(time)}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#817b72] transition hover:bg-[#fbfaf8] hover:text-[#151515]"
-                  aria-label={`Remove repeating ${repeatDayLabel} ${formatTime(time)}`}
+                  aria-label={`Remove future repeating ${repeatDayLabel} ${formatTime(time)}`}
                 >
-                  <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
                 </button>
               </div>
             ))}

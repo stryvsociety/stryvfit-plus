@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, NotebookPen, Salad, MessageCircle } from 'lucide-react';
+import { CalendarDays, NotebookPen, Salad, MessageCircle, UserRound } from 'lucide-react';
 
 const tabs = [
   { href: '/book', label: 'Book', icon: CalendarDays },
   { href: '/notes', label: 'Notes', icon: NotebookPen },
   { href: '/meals', label: 'Meals', icon: Salad },
   { href: '/coach', label: 'Coach', icon: MessageCircle },
+  { href: '/account', label: 'Account', icon: UserRound },
 ];
 
 export function TabBar() {
@@ -17,7 +18,7 @@ export function TabBar() {
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 glass border-t border-border/60 pb-[env(safe-area-inset-bottom)]">
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
         {tabs.map(({ href, label, icon: Icon }) => {
           const active = pathname?.startsWith(href);
           return (

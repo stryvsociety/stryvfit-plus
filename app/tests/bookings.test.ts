@@ -10,8 +10,10 @@ import {
   manualClerkUserId,
   normalizeAdminClientInput,
   normalizeAdminClientLimit,
+  normalizeClientProfileInput,
   normalizeClientPhoneInput,
 } from '../src/lib/bookings';
+import { clientLifecycleFromHistory } from '../src/lib/clientLifecycle';
 
 describe('booking utilities', () => {
   test('records consent metadata for session bookings', () => {
@@ -83,8 +85,46 @@ describe('booking utilities', () => {
     );
   });
 
+  test('normalizes client account profile fields without touching Clerk credentials', () => {
+    expect(
+      normalizeClientProfileInput({
+        fullName: '  Nia   McCain  ',
+        phone: '(305) 555-0198',
+        profileGoal: '  strength and mobility  ',
+        emergencyContactName: '  Dee   McCain ',
+        emergencyContactPhone: '+1 305 555 0199',
+      })
+    ).toEqual({
+      fullName: 'Nia McCain',
+      phone: '+13055550198',
+      profileGoal: 'strength and mobility',
+      emergencyContactName: 'Dee McCain',
+      emergencyContactPhone: '+13055550199',
+    });
+  });
+
   test('marks placeholder Clerk IDs as manual clients', () => {
     expect(manualClerkUserId('existing-client')).toBe('manual:existing-client');
+  });
+
+  test('tracks client lifecycle from first-session history', () => {
+    expect(clientLifecycleFromHistory({ bookings: [] })).toBe('new');
+    expect(
+      clientLifecycleFromHistory({
+        bookings: [{ service_type: 'free', status: 'confirmed', starts_at: '2026-06-20T14:00:00.000Z' }],
+      })
+    ).toBe('first_session_booked');
+    expect(
+      clientLifecycleFromHistory({
+        bookings: [{ service_type: 'free', status: 'completed', starts_at: '2026-06-12T14:00:00.000Z' }],
+      })
+    ).toBe('returning');
+    expect(
+      clientLifecycleFromHistory({
+        bookings: [{ service_type: 'sessions_4', status: 'confirmed', starts_at: '2026-06-12T14:00:00.000Z' }],
+      })
+    ).toBe('returning');
+    expect(clientLifecycleFromHistory({ manual: true, bookings: [] })).toBe('existing');
   });
 
   test('caps admin client roster limits for API reads', () => {
@@ -137,7 +177,8 @@ describe('booking utilities', () => {
         name: 'Dangel Smith',
         email: 'dangel@example.com',
         phone: '+13055550198',
-        status: 'Booked appointment',
+        lifecycle: 'first_session_booked',
+        status: 'First session booked',
       },
     ]);
 
@@ -148,8 +189,9 @@ describe('booking utilities', () => {
           name: 'Dangel Smith',
           email: 'dangel@example.com',
           phone: null,
-          status: 'Client account',
-          goal: 'Client profile',
+          lifecycle: 'new',
+          status: 'New client',
+          goal: 'First session pending',
           payment: 'No billing yet',
         },
       ],
@@ -164,7 +206,7 @@ describe('booking utilities', () => {
     const subscriptionBooking: AdminBookingSummary = {
       id: 'calendar:nyce-subscription',
       source: 'google_calendar',
-      serviceType: 'coaching',
+      serviceType: 'sessions_4',
       serviceLabel: 'StryvFit+ session for Nyce Reynolds',
       status: 'confirmed',
       startsAt: '2026-06-12T13:00:00.000Z',
@@ -195,8 +237,9 @@ describe('booking utilities', () => {
           name: 'Nyce Reynolds',
           email: 'blackrockstarmg@gmail.com',
           phone: null,
-          status: 'Client account',
-          goal: 'Client profile',
+          lifecycle: 'new',
+          status: 'New client',
+          goal: 'First session pending',
           payment: 'No billing yet',
         },
       ],

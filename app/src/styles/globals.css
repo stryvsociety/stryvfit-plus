@@ -373,13 +373,23 @@ html, body {
   max-width: 100% !important;
 }
 
+.auth-clerk-frame .cl-header,
+.auth-clerk-frame .cl-footer,
+.auth-clerk-frame .cl-main,
+.auth-clerk-frame .cl-headerTitle,
+.auth-clerk-frame .cl-headerSubtitle {
+  text-align: center;
+}
+
 @media (max-width: 640px) {
   .auth-shell {
-    justify-items: start;
+    place-items: center;
+    padding-inline: 1rem;
   }
 
   .auth-panel {
-    margin-inline: 0;
+    margin-inline: auto;
+    max-width: min(100%, 22rem);
   }
 }
 

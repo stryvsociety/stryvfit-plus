@@ -60,10 +60,10 @@ Journaling:
 
 Payment prompts:
 
-- The app should not nag on the home calendar.
-- Payment prompts happen when the user transitions phases.
-- Demo payment state uses `/book?session=remote&pastDueDays=7`.
-- At 7+ days past due, booking should be locked once live billing state is wired.
+- The billing panel reads live Stripe state from `/api/billing/summary`.
+- Payment recovery appears as an in-app toast with `Update Billing` and `Retry` iOS-chip CTAs.
+- PWA push notices route to `/book?billing=update` or `/book?billing=retry`.
+- At 7+ days past due, unpaid, canceled, or expired billing states lock booking until billing is current.
 
 ## StryvAdmin
 
@@ -148,7 +148,7 @@ Chat, show the client remote session flow with the countdown, workout completion
 Payment walkthrough:
 
 ```text
-Chat, open /book?session=remote&pastDueDays=7 and show me where the app blocks booking and where it nags.
+Chat, sign in as a client with a past-due Stripe subscription and show me the billing panel, recovery toast, Update Billing CTA, and Retry CTA.
 ```
 
 ## What Not To Do

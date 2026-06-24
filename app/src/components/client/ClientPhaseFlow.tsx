@@ -3,14 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
+  Bell,
   CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
+  CreditCard,
   Dumbbell,
   Menu,
   NotebookPen,
   Play,
+  RefreshCw,
   Salad,
   Video,
   WalletCards,
@@ -26,6 +29,7 @@ import { ThemeToggle, usePersistedTheme } from '@/components/ui/ThemeToggle';
 import { parseBookingService, type BookingServiceType } from '@/lib/bookingServices';
 import type { AdminAppointmentPlan } from '@/lib/adminAppointmentPlans';
 import type { AdminWorkoutRoutine } from '@/lib/adminWorkoutRoutines';
+import type { BillingSummary } from '@/lib/billing';
 
 type Phase = 'calendar' | 'workout' | 'meal-prep' | 'journal';
 type SessionMode = 'none' | 'remote' | 'in-person';
@@ -80,49 +84,40 @@ const journalPrompts = [
   'What meal would make tomorrow easier?',
 ];
 
-const paymentNoticeDays = [-1, 1, 3, 5, 7];
-
-function getPaymentState(daysFromDue: number) {
-  return {
-    daysFromDue,
-    requiresPayment: paymentNoticeDays.includes(daysFromDue),
-    bookingLocked: daysFromDue >= 7,
-  };
-}
-
-function useClientQueryState(): {
+function useClientQueryState(initialServiceType: BookingServiceType): {
   sessionMode: SessionMode;
-  daysFromDue: number;
   serviceType: BookingServiceType;
   bookingStatus: string | null;
+  billingAction: 'update' | 'retry' | null;
 } {
   const [mode, setMode] = useState<SessionMode>('none');
-  const [daysFromDue, setDaysFromDue] = useState(0);
-  const [serviceType, setServiceType] = useState<BookingServiceType>('free');
+  const [serviceType, setServiceType] = useState<BookingServiceType>(initialServiceType);
   const [bookingStatus, setBookingStatus] = useState<string | null>(null);
+  const [billingAction, setBillingAction] = useState<'update' | 'retry' | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requested = params.get('session');
-    const due = Number(params.get('pastDueDays') ?? 0);
     setMode(requested === 'remote' || requested === 'in-person' ? requested : 'none');
-    setDaysFromDue(Number.isFinite(due) ? due : 0);
-    setServiceType(parseBookingService(params.get('service')));
+    setServiceType(params.has('service') ? parseBookingService(params.get('service')) : initialServiceType);
     setBookingStatus(params.get('booking'));
-  }, []);
+    const billing = params.get('billing');
+    setBillingAction(billing === 'update' || billing === 'retry' ? billing : null);
+  }, [initialServiceType]);
 
-  return { sessionMode: mode, daysFromDue, serviceType, bookingStatus };
+  return { sessionMode: mode, serviceType, bookingStatus, billingAction };
 }
 
 export function ClientPhaseFlow({
   appointmentPlans = [],
+  initialServiceType = 'free',
   workoutRoutines = [],
 }: {
   appointmentPlans?: AdminAppointmentPlan[];
+  initialServiceType?: BookingServiceType;
   workoutRoutines?: AdminWorkoutRoutine[];
 }) {
-  const { sessionMode, daysFromDue, serviceType, bookingStatus } = useClientQueryState();
-  const paymentState = useMemo(() => getPaymentState(daysFromDue), [daysFromDue]);
+  const { sessionMode, serviceType, bookingStatus, billingAction } = useClientQueryState(initialServiceType);
   const hasSession = sessionMode !== 'none';
   const latestWorkoutRoutine = workoutRoutines[0] ?? null;
   const [phase, setPhase] = useState<Phase>('calendar');
@@ -132,6 +127,10 @@ export function ClientPhaseFlow({
   const [deliberating, setDeliberating] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [billingBusy, setBillingBusy] = useState(false);
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
+  const [billingLoading, setBillingLoading] = useState(true);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [bookingMessage, setBookingMessage] = useState<string | null>(() => {
     if (bookingStatus === 'success') return 'Payment received. We are confirming your calendar event.';
@@ -141,6 +140,14 @@ export function ClientPhaseFlow({
   });
   const [theme, setTheme] = usePersistedTheme('stryvfit-theme', 'dark');
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const billingActionHandled = useRef(false);
+  const paymentState = useMemo(
+    () => ({
+      requiresPayment: billingSummary?.requiresPayment ?? false,
+      bookingLocked: billingSummary?.bookingLocked ?? false,
+    }),
+    [billingSummary]
+  );
 
   useEffect(() => {
     if (!hasSession || countdown <= 0) return;
@@ -151,6 +158,29 @@ export function ClientPhaseFlow({
   useEffect(() => {
     if (hasSession && countdown === 0) setPhase('workout');
   }, [countdown, hasSession]);
+
+  async function refreshBillingSummary() {
+    setBillingLoading(true);
+    try {
+      const res = await fetch('/api/billing/summary', { cache: 'no-store' });
+      const payload = (await res.json().catch(() => ({}))) as { billing?: BillingSummary; error?: string };
+      if (!res.ok || !payload.billing) throw new Error(payload.error ?? 'Unable to load billing');
+      setBillingSummary(payload.billing);
+    } catch (error) {
+      setBillingMessage(error instanceof Error ? error.message : 'Unable to load billing');
+    } finally {
+      setBillingLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshBillingSummary();
+  }, []);
+
+  useEffect(() => {
+    if (!billingSummary?.requiresPayment) return;
+    setPaymentOpen(true);
+  }, [billingSummary?.requiresPayment]);
 
   function deliberateNext(next: Phase) {
     setDeliberating(true);
@@ -229,6 +259,98 @@ export function ClientPhaseFlow({
       setBillingBusy(false);
     }
   }
+
+  async function retryBillingPayment() {
+    if (retryBusy) return;
+    setRetryBusy(true);
+    setBillingMessage(null);
+    try {
+      const res = await fetch('/api/billing/retry', { method: 'POST' });
+      const payload = (await res.json().catch(() => ({}))) as { billing?: BillingSummary; error?: string };
+      if (!res.ok || !payload.billing) {
+        throw new Error(payload.error ?? 'Unable to retry payment');
+      }
+      setBillingSummary(payload.billing);
+      setBillingMessage(payload.billing.requiresPayment ? 'Retry sent. Stripe still needs attention.' : 'Payment retry succeeded.');
+      if (!payload.billing.requiresPayment) setPaymentOpen(false);
+    } catch (error) {
+      setBillingMessage(error instanceof Error ? error.message : 'Unable to retry payment');
+    } finally {
+      setRetryBusy(false);
+    }
+  }
+
+  function applicationServerKey(publicKey: string): ArrayBuffer {
+    const padding = '='.repeat((4 - (publicKey.length % 4)) % 4);
+    const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = window.atob(base64);
+    const bytes = Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  }
+
+  async function enableBillingPushAlerts() {
+    if (pushBusy) return;
+    setPushBusy(true);
+    setBillingMessage(null);
+    try {
+      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        throw new Error('Push alerts are not available in this browser.');
+      }
+
+      const keyRes = await fetch('/api/pwa/push-subscription', { cache: 'no-store' });
+      const keyPayload = (await keyRes.json().catch(() => ({}))) as {
+        enabled?: boolean;
+        publicKey?: string;
+        error?: string;
+      };
+      if (!keyRes.ok || !keyPayload.enabled || !keyPayload.publicKey) {
+        throw new Error(keyPayload.error ?? 'Push alerts are not configured yet.');
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') throw new Error('Push alerts were not enabled.');
+
+      const registration = await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey(keyPayload.publicKey),
+        }));
+
+      const saveRes = await fetch('/api/pwa/push-subscription', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(subscription.toJSON()),
+      });
+      if (!saveRes.ok) {
+        const payload = (await saveRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? 'Unable to save push alerts');
+      }
+
+      setBillingMessage('Billing push alerts are enabled for this device.');
+    } catch (error) {
+      setBillingMessage(error instanceof Error ? error.message : 'Unable to enable push alerts');
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!billingAction || billingActionHandled.current) return;
+    billingActionHandled.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('billing');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    if (billingAction === 'update') {
+      void openBillingPortal();
+    } else {
+      void retryBillingPayment();
+    }
+    // Notification action query params are one-shot commands; the ref above prevents replay after state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingAction]);
 
   function onTouchEnd(event: TouchEvent<HTMLDivElement>) {
     if (!touchStart.current) return;
@@ -310,10 +432,16 @@ export function ClientPhaseFlow({
               serviceType={serviceType}
               bookingMessage={bookingMessage}
               billingBusy={billingBusy}
+              retryBusy={retryBusy}
+              pushBusy={pushBusy}
+              billingSummary={billingSummary}
+              billingLoading={billingLoading}
               billingMessage={billingMessage}
               appointmentPlans={appointmentPlans}
               workoutRoutines={workoutRoutines}
               onOpenBillingPortal={openBillingPortal}
+              onRetryBilling={retryBillingPayment}
+              onEnablePushAlerts={enableBillingPushAlerts}
               onPreviewWorkout={() => (countdown === 0 || latestWorkoutRoutine) && setPhase('workout')}
               onBookSession={createBooking}
             />
@@ -337,8 +465,23 @@ export function ClientPhaseFlow({
             onClose={() => setPaymentOpen(false)}
             bookingLocked={paymentState.bookingLocked}
             billingBusy={billingBusy}
+            retryBusy={retryBusy}
+            billingSummary={billingSummary}
             billingMessage={billingMessage}
             onOpenBillingPortal={openBillingPortal}
+            onRetryBilling={retryBillingPayment}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {billingSummary?.requiresPayment ? (
+          <BillingRecoveryToast
+            billing={billingSummary}
+            billingBusy={billingBusy}
+            retryBusy={retryBusy}
+            onOpenBillingPortal={openBillingPortal}
+            onRetryBilling={retryBillingPayment}
           />
         ) : null}
       </AnimatePresence>
@@ -353,10 +496,16 @@ function CalendarOnly({
   serviceType,
   bookingMessage,
   billingBusy,
+  retryBusy,
+  pushBusy,
+  billingSummary,
+  billingLoading,
   billingMessage,
   appointmentPlans,
   workoutRoutines,
   onOpenBillingPortal,
+  onRetryBilling,
+  onEnablePushAlerts,
   onPreviewWorkout,
   onBookSession,
 }: {
@@ -366,10 +515,16 @@ function CalendarOnly({
   serviceType: BookingServiceType;
   bookingMessage: string | null;
   billingBusy: boolean;
+  retryBusy: boolean;
+  pushBusy: boolean;
+  billingSummary: BillingSummary | null;
+  billingLoading: boolean;
   billingMessage: string | null;
   appointmentPlans: AdminAppointmentPlan[];
   workoutRoutines: AdminWorkoutRoutine[];
   onOpenBillingPortal: () => void;
+  onRetryBilling: () => void;
+  onEnablePushAlerts: () => void;
   onPreviewWorkout: () => void;
   onBookSession: (draft: SchedulerBookingDraft) => Promise<void>;
 }) {
@@ -436,24 +591,17 @@ function CalendarOnly({
           </div>
         ) : (
           <>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
-            <div>
-              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Billing</p>
-              <p className="mt-1 font-body text-sm leading-relaxed text-text-muted">
-                Update payment details or manage a recurring plan through Stripe.
-              </p>
-              {billingMessage ? <p className="mt-2 font-body text-xs leading-relaxed text-text-muted">{billingMessage}</p> : null}
-            </div>
-            <button
-              type="button"
-              onClick={onOpenBillingPortal}
-              disabled={billingBusy}
-              className="ios-pill inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-text-muted transition hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <WalletCards className="h-4 w-4" />
-              {billingBusy ? 'Opening' : 'Manage billing'}
-            </button>
-          </div>
+          <BillingPanel
+            billing={billingSummary}
+            loading={billingLoading}
+            billingBusy={billingBusy}
+            retryBusy={retryBusy}
+            pushBusy={pushBusy}
+            billingMessage={billingMessage}
+            onOpenBillingPortal={onOpenBillingPortal}
+            onRetryBilling={onRetryBilling}
+            onEnablePushAlerts={onEnablePushAlerts}
+          />
           {bookingMessage ? (
             <div className="mb-4 rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
               <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Booking status</p>
@@ -477,6 +625,127 @@ function CalendarOnly({
         )}
       </div>
     </motion.div>
+  );
+}
+
+function formatBillingDate(value: string | null | undefined): string {
+  if (!value) return 'Not set';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not set';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+function BillingPanel({
+  billing,
+  loading,
+  billingBusy,
+  retryBusy,
+  pushBusy,
+  billingMessage,
+  onOpenBillingPortal,
+  onRetryBilling,
+  onEnablePushAlerts,
+}: {
+  billing: BillingSummary | null;
+  loading: boolean;
+  billingBusy: boolean;
+  retryBusy: boolean;
+  pushBusy: boolean;
+  billingMessage: string | null;
+  onOpenBillingPortal: () => void;
+  onRetryBilling: () => void;
+  onEnablePushAlerts: () => void;
+}) {
+  const dueLabel = billing?.requiresPayment ? formatBillingDate(billing.dueDate) : formatBillingDate(billing?.renewalDate);
+  const dueTitle = billing?.requiresPayment ? 'Due date' : 'Renews';
+
+  return (
+    <section className="mb-4 rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Billing</p>
+          <h2 className="mt-2 font-section text-3xl leading-none">
+            {loading ? 'Loading billing' : billing?.planName ?? 'No monthly plan yet'}
+          </h2>
+          <p className="mt-2 font-body text-sm leading-relaxed text-text-muted">
+            {billing?.hasBilling
+              ? `${billing.statusLabel}${billing.amountLabel ? ` / ${billing.amountLabel}` : ''}`
+              : 'Book a paid package or monthly coaching plan to activate billing controls.'}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onOpenBillingPortal}
+            disabled={billingBusy}
+            className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-text-muted transition hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <WalletCards className="h-4 w-4" />
+            {billingBusy ? 'Opening' : 'Update billing'}
+          </button>
+          {billing?.canRetry ? (
+            <button
+              type="button"
+              onClick={onRetryBilling}
+              disabled={retryBusy}
+              className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full bg-gold px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-bg transition hover:bg-gold-deep disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${retryBusy ? 'animate-spin' : ''}`} />
+              {retryBusy ? 'Retrying' : 'Retry'}
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <BillingStat label={dueTitle} value={dueLabel} />
+        <BillingStat label="Payment method" value={billing?.paymentMethod?.label ?? 'No method linked'} />
+        <BillingStat label="Invoice" value={billing?.latestInvoice?.amountDueLabel ?? 'Current'} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {(billing?.acceptedPaymentMethods ?? []).map((method) => (
+          <span
+            key={method.id}
+            className={`ios-pill inline-flex min-h-8 items-center rounded-full border px-3 font-caption text-[9px] uppercase tracking-[0.12em] ${
+              method.available ? 'border-gold/40 text-gold' : 'border-border text-text-dim'
+            }`}
+          >
+            {method.label}: {method.available ? 'On' : 'Needs Stripe activation'}
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={onEnablePushAlerts}
+          disabled={pushBusy}
+          className="ios-pill inline-flex min-h-8 items-center gap-2 rounded-full border border-border px-3 font-caption text-[9px] uppercase tracking-[0.12em] text-text-muted transition hover:border-gold hover:text-gold disabled:opacity-60"
+        >
+          <Bell className="h-3.5 w-3.5" />
+          {pushBusy ? 'Enabling' : 'Enable billing alerts'}
+        </button>
+      </div>
+
+      {billing?.requiresPayment ? (
+        <p className="mt-4 font-body text-xs leading-relaxed text-primary">
+          Payment needs attention{billing.daysPastDue > 0 ? ` / ${billing.daysPastDue} day${billing.daysPastDue === 1 ? '' : 's'} past due` : ''}.
+          {billing.bookingLocked ? ' Booking is locked until billing is current.' : ' Booking stays open while recovery is in progress.'}
+        </p>
+      ) : null}
+      {billingMessage ? <p className="mt-3 font-body text-xs leading-relaxed text-text-muted">{billingMessage}</p> : null}
+    </section>
+  );
+}
+
+function BillingStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-sm border border-border/70 bg-bg/30 p-3">
+      <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-text-dim">{label}</p>
+      <p className="mt-1 font-body text-sm leading-snug text-text">{value}</p>
+    </div>
   );
 }
 
@@ -928,14 +1197,20 @@ function PaymentModal({
   onClose,
   bookingLocked,
   billingBusy,
+  retryBusy,
+  billingSummary,
   billingMessage,
   onOpenBillingPortal,
+  onRetryBilling,
 }: {
   onClose: () => void;
   bookingLocked: boolean;
   billingBusy: boolean;
+  retryBusy: boolean;
+  billingSummary: BillingSummary | null;
   billingMessage: string | null;
   onOpenBillingPortal: () => void;
+  onRetryBilling: () => void;
 }) {
   return (
     <motion.div
@@ -954,16 +1229,25 @@ function PaymentModal({
         <h2 className="mt-4 font-section text-4xl leading-none">Update payment</h2>
         <p className="mt-3 font-body text-sm leading-relaxed text-text-muted">
           We only surface this during the phase change. {bookingLocked ? 'Booking is paused until the balance is current.' : 'Your next phase unlocks once the balance is current.'}
+          {billingSummary?.latestInvoice?.amountDueLabel ? ` Amount due: ${billingSummary.latestInvoice.amountDueLabel}.` : ''}
         </p>
         {billingMessage ? <p className="mt-3 font-body text-xs leading-relaxed text-text-muted">{billingMessage}</p> : null}
-        <div className="mt-5 grid grid-cols-2 gap-2">
+        <div className="mt-5 grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={onOpenBillingPortal}
             disabled={billingBusy}
             className="ios-pill min-h-11 rounded-full bg-gold px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-bg disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {billingBusy ? 'Opening' : 'Manage billing'}
+            {billingBusy ? 'Opening' : 'Update Billing'}
+          </button>
+          <button
+            type="button"
+            onClick={onRetryBilling}
+            disabled={retryBusy || !billingSummary?.canRetry}
+            className="ios-pill min-h-11 rounded-full border border-gold/40 px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-gold disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {retryBusy ? 'Retrying' : 'Retry'}
           </button>
           <button
             type="button"
@@ -975,5 +1259,61 @@ function PaymentModal({
         </div>
       </motion.section>
     </motion.div>
+  );
+}
+
+function BillingRecoveryToast({
+  billing,
+  billingBusy,
+  retryBusy,
+  onOpenBillingPortal,
+  onRetryBilling,
+}: {
+  billing: BillingSummary;
+  billingBusy: boolean;
+  retryBusy: boolean;
+  onOpenBillingPortal: () => void;
+  onRetryBilling: () => void;
+}) {
+  return (
+    <motion.aside
+      initial={{ opacity: 0, y: 18, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 18, scale: 0.98 }}
+      className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[55] mx-auto max-w-md"
+      aria-live="polite"
+    >
+      <div className="rounded-[22px] border border-gold/30 bg-[#111111]/94 px-4 py-3 shadow-[0_22px_48px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-2xl">
+        <div className="flex items-start gap-3">
+          <CreditCard className="mt-1 h-5 w-5 flex-none text-gold" strokeWidth={1.7} />
+          <div className="min-w-0 flex-1">
+            <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Payment needs attention</p>
+            <p className="mt-1 font-body text-xs leading-relaxed text-text-muted">
+              {billing.latestInvoice?.amountDueLabel
+                ? `${billing.latestInvoice.amountDueLabel} is due for your monthly subscription.`
+                : 'Your monthly subscription needs a billing update.'}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onOpenBillingPortal}
+                disabled={billingBusy}
+                className="ios-pill inline-flex min-h-9 items-center justify-center rounded-full bg-gold px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-bg transition-colors hover:bg-gold-deep disabled:opacity-60"
+              >
+                {billingBusy ? 'Opening' : 'Update Billing'}
+              </button>
+              <button
+                type="button"
+                onClick={onRetryBilling}
+                disabled={retryBusy || !billing.canRetry}
+                className="ios-pill inline-flex min-h-9 items-center justify-center rounded-full border border-gold/40 px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-gold transition-colors hover:border-gold disabled:opacity-60"
+              >
+                {retryBusy ? 'Retrying' : 'Retry'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.aside>
   );
 }

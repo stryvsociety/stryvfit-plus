@@ -24,7 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { GoogleScheduler } from '@/components/scheduling/GoogleScheduler';
+import { GoogleScheduler, type SchedulerBookingDraft } from '@/components/scheduling/GoogleScheduler';
 import { MealPrepPlanner, type MealPrepPlanSnapshot } from '@/components/meals/MealPrepPlanner';
 import { SystemHealthPanel } from '@/components/incidents/SystemHealthPanel';
 import { AdminShell } from '@/components/admin/AdminShell';
@@ -33,6 +33,7 @@ import { usePersistedTheme } from '@/components/ui/ThemeToggle';
 import { adminBookingClientName, type AdminBookingSummary, type AdminClientSummary, type BookingStatus } from '@/lib/bookings';
 import { BOOKING_SERVICES } from '@/lib/bookingServices';
 import { combineBookingTzDateAndTime } from '@/lib/bookingAvailability';
+import { clientLifecycleLabel } from '@/lib/clientLifecycle';
 
 export type AdminTab = 'appointments' | 'meals' | 'clients';
 
@@ -60,6 +61,15 @@ type ClientDraft = {
   bodyType: string;
   focus: string;
   zip: string;
+};
+
+type ClientEditPayload = {
+  fullName: string;
+  email: string;
+  phone: string;
+  profileGoal: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
 };
 
 type ClientProfileMeta = {
@@ -117,6 +127,7 @@ const emptyClient: AdminClientSummary = {
   name: 'No clients yet',
   email: null,
   phone: null,
+  lifecycle: 'new',
   status: 'Waiting for signups',
   goal: 'Client profiles will appear here',
   payment: 'No billing yet',
@@ -185,11 +196,23 @@ function upsertClientSummary(clients: AdminClientSummary[], ...nextClients: Admi
   return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function clientEditDraftFromSummary(client: AdminClientSummary): ClientEditPayload {
+  return {
+    fullName: client.name === emptyClient.name ? '' : client.name,
+    email: client.email ?? '',
+    phone: client.phone ?? '',
+    profileGoal: client.profileGoal ?? client.goal ?? '',
+    emergencyContactName: client.emergencyContactName ?? '',
+    emergencyContactPhone: client.emergencyContactPhone ?? '',
+  };
+}
+
 function isStoredClientProfile(client: AdminClientSummary): boolean {
   return client.id !== emptyClient.id && !client.id.startsWith('booking:');
 }
 
 function clientNeedsAttention(client: AdminClientSummary): boolean {
+  if (client.lifecycle === 'returning' || client.lifecycle === 'existing') return false;
   const status = client.status.toLowerCase();
   const goal = client.goal.toLowerCase();
   const payment = client.payment.toLowerCase();
@@ -487,12 +510,15 @@ export function TrainerOpsStudio({
   const [clientRailOpen, setClientRailOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
   const [createdClients, setCreatedClients] = useState<AdminClientSummary[]>([]);
+  const [clientOverrides, setClientOverrides] = useState<Record<string, AdminClientSummary>>({});
   const [deletedClientIds, setDeletedClientIds] = useState<string[]>([]);
   const [clientDraft, setClientDraft] = useState<ClientDraft>(emptyClientDraft);
   const [clientMeta, setClientMeta] = useState<Record<string, ClientProfileMeta>>({});
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [addingClient, setAddingClient] = useState(false);
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
+  const [updatingClientId, setUpdatingClientId] = useState<string | null>(null);
+  const [creatingBooking, setCreatingBooking] = useState(false);
   const [clientNotice, setClientNotice] = useState<string | null>(null);
   const [requests, setRequests] = useState<AdminClientRequest[]>([]);
   const [requestsError, setRequestsError] = useState<string | null>(null);
@@ -501,10 +527,14 @@ export function TrainerOpsStudio({
   const baseClients = useMemo(
     () =>
       upsertClientSummary(
-        initialClients.filter((client) => !deletedClientIds.includes(client.id)),
-        ...createdClients.filter((client) => !deletedClientIds.includes(client.id))
+        initialClients
+          .filter((client) => !deletedClientIds.includes(client.id))
+          .map((client) => clientOverrides[client.id] ?? client),
+        ...createdClients
+          .filter((client) => !deletedClientIds.includes(client.id))
+          .map((client) => clientOverrides[client.id] ?? client)
       ),
-    [createdClients, deletedClientIds, initialClients]
+    [clientOverrides, createdClients, deletedClientIds, initialClients]
   );
   const clients = baseClients;
   const [selectedClient, setSelectedClient] = useState(() => initialClients[0]?.name ?? '');
@@ -727,6 +757,82 @@ export function TrainerOpsStudio({
       throw error;
     } finally {
       setUpdatingBookingId(null);
+    }
+  }
+
+  async function createBookingForSelectedClient(draft: SchedulerBookingDraft) {
+    if (creatingBooking) throw new Error('Appointment is already being scheduled.');
+    if (selected.id === emptyClient.id) {
+      throw new Error('Choose a client before scheduling.');
+    }
+    if (!selected.email && !UUID_RE.test(selected.id)) {
+      throw new Error('Add the client email before scheduling.');
+    }
+
+    setCreatingBooking(true);
+    setCancelNotice(null);
+    try {
+      const response = await fetch('/api/admin/bookings', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clientId: UUID_RE.test(selected.id) ? selected.id : null,
+          clientName: selected.name,
+          clientEmail: selected.email,
+          clientPhone: selected.phone,
+          serviceType: draft.serviceType,
+          startsAt: draft.startsAt,
+          durationMinutes: draft.durationMinutes,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        booking?: AdminBookingSummary;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.booking) {
+        throw new Error(payload?.error ?? 'Unable to schedule appointment');
+      }
+
+      setBookings((current) => sortAdminBookings([payload.booking as AdminBookingSummary, ...current]));
+      markPostPending();
+      setCancelNotice('Appointment scheduled in StryvFit and Google Calendar.');
+    } catch (error) {
+      setCancelNotice(error instanceof Error ? error.message : 'Unable to schedule appointment');
+      throw error;
+    } finally {
+      setCreatingBooking(false);
+    }
+  }
+
+  async function updateClientById(client: AdminClientSummary, draft: ClientEditPayload) {
+    if (!isStoredClientProfile(client) || updatingClientId) return;
+
+    setUpdatingClientId(client.id);
+    setClientNotice(null);
+    try {
+      const response = await fetch(`/api/admin/clients/${client.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(draft),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        client?: AdminClientSummary;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.client) throw new Error(payload?.error ?? 'Unable to update client');
+
+      const updatedClient = payload.client as AdminClientSummary;
+      setClientOverrides((current) => ({ ...current, [updatedClient.id]: updatedClient }));
+      setCreatedClients((current) =>
+        current.map((item) => (item.id === updatedClient.id ? updatedClient : item))
+      );
+      setSelectedClient(updatedClient.name);
+      markPostPending();
+      setClientNotice(`${updatedClient.name} profile saved.`);
+    } catch (error) {
+      setClientNotice(error instanceof Error ? error.message : 'Unable to update client');
+    } finally {
+      setUpdatingClientId(null);
     }
   }
 
@@ -989,6 +1095,12 @@ export function TrainerOpsStudio({
                   </dl>
                 </div>
 
+                <ClientProfileEditor
+                  busy={updatingClientId === selected.id}
+                  client={selected}
+                  onSave={(draft) => void updateClientById(selected, draft)}
+                />
+
                 <div className="mt-3">
                   <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Queue</p>
                   <div className="mt-2 space-y-2">
@@ -1137,7 +1249,10 @@ export function TrainerOpsStudio({
                   cancelingBookingId={cancelingBookingId}
                   updatingBookingId={updatingBookingId}
                   cancelNotice={cancelNotice}
+                  creatingBooking={creatingBooking}
+                  selectedClient={selected}
                   selectedClientName={selected.name}
+                  onCreateBooking={createBookingForSelectedClient}
                   onCancelBooking={cancelBookingById}
                   onDirty={markPostPending}
                   onUpdateBooking={updateBookingById}
@@ -1185,6 +1300,80 @@ export function TrainerOpsStudio({
         />
       </div>
     </AdminShell>
+  );
+}
+
+function ClientProfileEditor({
+  busy,
+  client,
+  onSave,
+}: {
+  busy: boolean;
+  client: AdminClientSummary;
+  onSave: (draft: ClientEditPayload) => void;
+}) {
+  const editable = isStoredClientProfile(client);
+  const [draft, setDraft] = useState(() => clientEditDraftFromSummary(client));
+
+  useEffect(() => {
+    setDraft(clientEditDraftFromSummary(client));
+  }, [client]);
+
+  function updateDraft(field: keyof ClientEditPayload, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  return (
+    <form
+      className="mt-3 rounded-md border border-[#dedbd4] bg-white p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (editable && !busy) onSave(draft);
+      }}
+    >
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">Profile edit</p>
+          <p className="mt-1 font-body text-xs leading-relaxed text-[#6d675f]">
+            Save client contact, goal, and emergency info. Clerk owns signed-in email and password changes.
+          </p>
+        </div>
+        <button
+          type="submit"
+          disabled={!editable || busy}
+          className="ios-pill inline-flex min-h-9 items-center gap-2 rounded-full bg-[#151515] px-3 font-caption text-[8px] uppercase tracking-[0.12em] text-white disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <Save className="h-3.5 w-3.5" strokeWidth={1.8} />
+          {busy ? 'Saving' : 'Save'}
+        </button>
+      </div>
+      <div className="grid gap-2">
+        {[
+          ['fullName', 'Name', 'text'],
+          ['email', 'Email', 'email'],
+          ['phone', 'Mobile', 'tel'],
+          ['profileGoal', 'Goal', 'text'],
+          ['emergencyContactName', 'Emergency contact', 'text'],
+          ['emergencyContactPhone', 'Emergency phone', 'tel'],
+        ].map(([field, label, type]) => (
+          <label key={field} className="block">
+            <span className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">{label}</span>
+            <input
+              type={type}
+              value={draft[field as keyof ClientEditPayload]}
+              disabled={!editable || busy}
+              onChange={(event) => updateDraft(field as keyof ClientEditPayload, event.target.value)}
+              className="mt-1 min-h-10 w-full rounded-md border border-[#dedbd4] bg-[#fbfaf8] px-3 font-body text-sm text-[#151515] outline-none focus:border-[#f24f09] disabled:cursor-not-allowed disabled:opacity-55"
+            />
+          </label>
+        ))}
+      </div>
+      {!editable ? (
+        <p className="mt-3 rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-2 font-body text-xs leading-relaxed text-[#6d675f]">
+          Save this person as a client profile before editing account details.
+        </p>
+      ) : null}
+    </form>
   );
 }
 
@@ -1264,7 +1453,7 @@ function ClientsPanel({
                     {meta.county}
                   </span>
                   <span className="self-center text-right font-caption text-[8px] uppercase tracking-[0.11em] text-[#f24f09]">
-                    {clientNeedsAttention(client) ? 'Review' : 'Ready'}
+                    {client.lifecycle ? clientLifecycleLabel(client.lifecycle) : clientNeedsAttention(client) ? 'Review' : 'Ready'}
                   </span>
                 </button>
               );
@@ -1471,6 +1660,17 @@ function bookingStatusLabel(booking: AdminBookingSummary): string {
   return 'Confirmed';
 }
 
+function adminBookingSortValue(booking: AdminBookingSummary): number {
+  const startsAt = new Date(booking.startsAt).getTime();
+  if (Number.isNaN(startsAt)) return Number.MAX_SAFE_INTEGER;
+  const now = Date.now();
+  return startsAt >= now ? startsAt : Number.MAX_SAFE_INTEGER - startsAt;
+}
+
+function sortAdminBookings(bookings: AdminBookingSummary[]): AdminBookingSummary[] {
+  return [...bookings].sort((a, b) => adminBookingSortValue(a) - adminBookingSortValue(b));
+}
+
 type BookingEditDraft = {
   clientName: string;
   clientEmail: string;
@@ -1548,7 +1748,10 @@ function AppointmentsPanel({
   cancelingBookingId,
   updatingBookingId,
   cancelNotice,
+  creatingBooking,
+  selectedClient,
   selectedClientName,
+  onCreateBooking,
   onCancelBooking,
   onDirty,
   onUpdateBooking,
@@ -1557,12 +1760,16 @@ function AppointmentsPanel({
   cancelingBookingId: string | null;
   updatingBookingId: string | null;
   cancelNotice: string | null;
+  creatingBooking: boolean;
+  selectedClient: AdminClientSummary;
   selectedClientName: string;
+  onCreateBooking: (draft: SchedulerBookingDraft) => Promise<void>;
   onCancelBooking: (bookingId: string) => Promise<void>;
   onDirty: () => void;
   onUpdateBooking: (bookingId: string, draft: BookingEditPayload) => Promise<void>;
 }) {
   const [appointmentView, setAppointmentView] = useState<AppointmentView>('day');
+  const [manualServiceType, setManualServiceType] = useState<AdminBookingSummary['serviceType']>('sessions_4');
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [editDrafts, setEditDrafts] = useState<Record<string, BookingEditDraft>>({});
   const visibleBookings = useMemo(() => {
@@ -1671,11 +1878,51 @@ function AppointmentsPanel({
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
             >
+              <div className="mb-3 rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-3">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">
+                      Manual scheduling
+                    </p>
+                    <p className="mt-1 font-body text-sm font-semibold text-[#151515]">
+                      {selectedClientName}
+                    </p>
+                    <p className="mt-1 font-body text-xs leading-relaxed text-[#6d675f]">
+                      Creates a StryvFit booking row and a Google Calendar event every time.
+                    </p>
+                  </div>
+                  <label className="block min-w-[12rem]">
+                    <span className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">
+                      Service
+                    </span>
+                    <select
+                      value={manualServiceType}
+                      onChange={(event) =>
+                        setManualServiceType(event.target.value as AdminBookingSummary['serviceType'])
+                      }
+                      className="mt-1 min-h-10 w-full rounded-full border border-[#dedbd4] bg-white px-3 font-body text-sm text-[#151515] outline-none focus:border-[#f24f09]"
+                    >
+                      {Object.values(BOOKING_SERVICES).map((service) => (
+                        <option key={service.type} value={service.type}>
+                          {service.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {creatingBooking ? (
+                  <p className="mt-2 font-body text-xs text-[#6d675f]">Scheduling in StryvFit and Google Calendar...</p>
+                ) : selectedClient.id === emptyClient.id ? (
+                  <p className="mt-2 font-body text-xs text-[#d12f1b]">Choose a client before scheduling.</p>
+                ) : null}
+              </div>
               <GoogleScheduler
                 title={`StryvFit+ session for ${selectedClientName}`}
                 description="Trainer-managed appointment block pushed from StryvAdmin."
                 durationMinutes={60}
+                serviceType={manualServiceType}
                 variant="timeline"
+                onBookSession={onCreateBooking}
                 manageAvailability
               />
             </motion.div>

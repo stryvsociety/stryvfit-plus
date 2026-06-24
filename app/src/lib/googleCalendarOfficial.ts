@@ -22,7 +22,7 @@ export type GoogleCalendarDeleteResult =
   | { ok: true; missing?: boolean }
   | { ok: false; reason: string };
 
-type CalendarEventInput = {
+export type CalendarEventInput = {
   bookingId: string;
   title: string;
   description: string;
@@ -267,6 +267,73 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<st
   }
 }
 
+export async function updateCalendarEvent(
+  eventId: string,
+  input: CalendarEventInput
+): Promise<GoogleCalendarDeleteResult> {
+  try {
+    const accessToken = await getGoogleAccessToken();
+    if (!accessToken) {
+      await reportGoogleCalendarIncident({
+        route: '/api/admin/bookings/[id]',
+        message: 'Google Calendar event update skipped: missing Google OAuth configuration',
+        context: { eventId, bookingId: input.bookingId },
+        adminAction: 'Refresh Google Calendar credentials; the Solvys booking was not updated.',
+      });
+      return { ok: false, reason: 'Google Calendar credentials are missing.' };
+    }
+
+    const calendarId = googleCalendarId();
+    const event = {
+      summary: input.title,
+      description: input.description,
+      start: { dateTime: input.startsAt, timeZone: process.env.BOOKING_TIMEZONE ?? 'America/New_York' },
+      end: { dateTime: input.endsAt, timeZone: process.env.BOOKING_TIMEZONE ?? 'America/New_York' },
+      attendees: input.attendeeEmail
+        ? [{ email: input.attendeeEmail, displayName: input.attendeeName ?? undefined }]
+        : undefined,
+      extendedProperties: {
+        private: {
+          stryvfit_booking_id: input.bookingId,
+        },
+      },
+    };
+
+    const res = await fetch(
+      `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+      {
+        method: 'PATCH',
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(event),
+      }
+    );
+
+    if (res.status === 404 || res.status === 410) return { ok: false, reason: 'Google Calendar event is missing.' };
+    if (res.ok) return { ok: true };
+
+    const text = await res.text();
+    await reportGoogleCalendarIncident({
+      route: '/api/admin/bookings/[id]',
+      message: `Google Calendar event update failed: ${res.status}`,
+      context: { eventId, bookingId: input.bookingId, response: text.slice(0, 500) },
+      adminAction: 'Check Google OAuth permissions; the Solvys booking was not updated.',
+    });
+    return { ok: false, reason: `Google Calendar update failed with ${res.status}.` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Google Calendar event update failed';
+    await reportGoogleCalendarIncident({
+      route: '/api/admin/bookings/[id]',
+      message,
+      context: { eventId, bookingId: input.bookingId },
+      adminAction: 'Check Google OAuth permissions; the Solvys booking was not updated.',
+    });
+    return { ok: false, reason: message };
+  }
+}
+
 export async function calendarEventExists(eventId: string): Promise<boolean | null> {
   try {
     const accessToken = await getGoogleAccessToken();
@@ -316,7 +383,7 @@ export async function deleteCalendarEvent(eventId: string): Promise<GoogleCalend
         route: '/api/admin/bookings/[id]',
         message: 'Google Calendar event deletion skipped: missing Google OAuth configuration',
         context: { eventId },
-        adminAction: 'Refresh Google Calendar credentials; the Solvys booking was cancelled locally.',
+        adminAction: 'Refresh Google Calendar credentials; the Solvys booking was not cancelled locally.',
       });
       return { ok: false, reason: 'Google Calendar credentials are missing.' };
     }
@@ -340,7 +407,7 @@ export async function deleteCalendarEvent(eventId: string): Promise<GoogleCalend
       route: '/api/admin/bookings/[id]',
       message: `Google Calendar event deletion failed: ${res.status}`,
       context: { eventId, response: text.slice(0, 500) },
-      adminAction: 'Manually delete the Google Calendar event; the Solvys booking was cancelled locally.',
+      adminAction: 'Check Google OAuth permissions; the Solvys booking was not cancelled locally.',
     });
     return { ok: false, reason: `Google Calendar delete failed with ${res.status}.` };
   } catch (error) {
@@ -349,7 +416,7 @@ export async function deleteCalendarEvent(eventId: string): Promise<GoogleCalend
       route: '/api/admin/bookings/[id]',
       message,
       context: { eventId },
-      adminAction: 'Manually delete the Google Calendar event; the Solvys booking was cancelled locally.',
+      adminAction: 'Check Google OAuth permissions; the Solvys booking was not cancelled locally.',
     });
     return { ok: false, reason: message };
   }

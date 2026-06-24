@@ -140,5 +140,6 @@ If wger shows fallback:
 
 If payment/session behavior looks fake:
 
-- It probably is. Current demo state uses URL params.
-- Do not present demo query params as live Stripe/Supabase state.
+- Remote/in-person session demos still use URL params, but billing state is live Stripe-backed.
+- Do not present session demo query params as live Stripe/Supabase state.
+- Verify billing through `/api/billing/summary`, `/api/billing/retry`, Stripe webhook state, and the client billing panel.

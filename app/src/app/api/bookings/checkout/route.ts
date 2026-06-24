@@ -10,7 +10,7 @@ import {
 import { BOOKING_SERVICES, parseBookingService } from '@/lib/bookingServices';
 import { BOOKING_CONSENT_FORM_URL, bookingRequiresConsent } from '@/lib/bookingConsent';
 import { hasBookedFreeFirstSession, requireApiUser } from '@/lib/auth';
-import { FIRST_SESSION_BOOKING_PATH } from '@/lib/routes';
+import { FIRST_SESSION_BOOKING_PATH, RETURNING_MEMBER_BOOKING_PATH } from '@/lib/routes';
 import { appUrl, stripe } from '@/lib/stripeClient';
 
 export const runtime = 'nodejs';
@@ -35,14 +35,28 @@ export async function POST(req: Request) {
   const serviceType = parseBookingService(body?.serviceType);
   const requiresConsent = bookingRequiresConsent(serviceType);
 
-  if (appUser.role === 'client' && serviceType !== 'free' && !(await hasBookedFreeFirstSession(appUser))) {
-    return NextResponse.json(
-      {
-        error: 'Book your free first session before selecting a package.',
-        redirectUrl: appUrl(FIRST_SESSION_BOOKING_PATH),
-      },
-      { status: 409 }
-    );
+  if (appUser.role === 'client') {
+    const hasFirstSession = await hasBookedFreeFirstSession(appUser);
+
+    if (serviceType === 'free' && hasFirstSession) {
+      return NextResponse.json(
+        {
+          error: 'Your free first session is already on file. Choose a paid session or package.',
+          redirectUrl: appUrl(RETURNING_MEMBER_BOOKING_PATH),
+        },
+        { status: 409 }
+      );
+    }
+
+    if (serviceType !== 'free' && !hasFirstSession) {
+      return NextResponse.json(
+        {
+          error: 'Book your free first session before selecting a package.',
+          redirectUrl: appUrl(FIRST_SESSION_BOOKING_PATH),
+        },
+        { status: 409 }
+      );
+    }
   }
 
   if (!startsAt || !endsAt || endsAt <= startsAt || ![30, 45, 60, 90, 120].includes(durationMinutes)) {

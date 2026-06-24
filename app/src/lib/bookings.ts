@@ -9,6 +9,12 @@ import {
   parseBookingService,
   type BookingServiceType,
 } from '@/lib/bookingServices';
+import {
+  clientLifecycleFromHistory,
+  clientLifecycleLabel,
+  type ClientLifecycle,
+  type ClientLifecycleBooking,
+} from '@/lib/clientLifecycle';
 import { captureServerIncident } from '@/lib/serverIncidents';
 import {
   calendarEventExists,
@@ -17,6 +23,7 @@ import {
   listUpcomingCalendarEvents,
   type GoogleCalendarImportedEvent,
   listBusyWindows,
+  updateCalendarEvent,
 } from '@/lib/googleCalendarOfficial';
 import { serviceClient } from '@/lib/supabase';
 
@@ -44,6 +51,7 @@ export type BookingRow = {
   client_phone: string | null;
   stripe_checkout_session_id: string | null;
   google_event_id: string | null;
+  metadata: Record<string, unknown>;
 };
 
 export type AdminBookingSummary = {
@@ -66,10 +74,20 @@ export type AdminClientSummary = {
   name: string;
   email: string | null;
   phone: string | null;
+  lifecycle: ClientLifecycle;
   status: string;
   goal: string;
   payment: string;
+  profileGoal?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
   manual?: boolean;
+};
+
+export type ClientBookingSummary = AdminBookingSummary & {
+  canCancel: boolean;
+  lateCancellation: boolean;
+  lateCancellationBlocked: boolean;
 };
 
 type CreateBookingInput = {
@@ -84,6 +102,16 @@ type CreateBookingInput = {
   startsAt: string;
   endsAt: string;
   durationMinutes: number;
+};
+
+export type CreateAdminBookingInput = {
+  clientId?: unknown;
+  clientName?: unknown;
+  clientEmail?: unknown;
+  clientPhone?: unknown;
+  serviceType?: unknown;
+  startsAt?: unknown;
+  durationMinutes?: unknown;
 };
 
 export type UpdateBookingInput = {
@@ -103,10 +131,18 @@ export type CreateAdminClientInput = {
   existingClient?: unknown;
 };
 
+export type UpdateClientProfileInput = {
+  fullName?: unknown;
+  phone?: unknown;
+  profileGoal?: unknown;
+  emergencyContactName?: unknown;
+  emergencyContactPhone?: unknown;
+};
+
 const BOOKING_SELECT =
-  'id, app_user_id, clerk_user_id, service_type, status, starts_at, ends_at, duration_minutes, client_email, client_name, client_phone, stripe_checkout_session_id, google_event_id';
+  'id, app_user_id, clerk_user_id, service_type, status, starts_at, ends_at, duration_minutes, client_email, client_name, client_phone, stripe_checkout_session_id, google_event_id, metadata';
 const APP_USER_SELECT =
-  'id, clerk_user_id, email, full_name, phone, role, stripe_customer_id, stripe_subscription_id, subscription_status';
+  'id, clerk_user_id, email, full_name, phone, role, stripe_customer_id, stripe_subscription_id, subscription_status, profile_goal, emergency_contact_name, emergency_contact_phone';
 
 const BOOKING_STATUSES: BookingStatus[] = [
   'held',
@@ -118,6 +154,7 @@ const BOOKING_STATUSES: BookingStatus[] = [
   'no_show',
   'expired',
 ];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 
 function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
   return aStart < bEnd && bStart < aEnd;
@@ -321,6 +358,14 @@ type AppUserRow = {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   subscription_status: string | null;
+  profile_goal: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+};
+
+type ClientLifecycleBookingRow = ClientLifecycleBooking & {
+  app_user_id: string | null;
+  client_email: string | null;
 };
 
 function prettyStatus(value: string | null): string | null {
@@ -330,23 +375,53 @@ function prettyStatus(value: string | null): string | null {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function toAdminClientSummary(row: AppUserRow): AdminClientSummary {
+function clientLifecycleGoal(lifecycle: ClientLifecycle, row: AppUserRow): string {
+  if (row.profile_goal?.trim()) return row.profile_goal.trim();
+  if (row.stripe_subscription_id) return 'Subscription client';
+  if (lifecycle === 'new') return 'First session pending';
+  if (lifecycle === 'first_session_booked') return 'First session scheduled';
+  if (lifecycle === 'existing') return 'Imported existing client';
+  return 'Post-session client';
+}
+
+function clientLifecycleStatus(lifecycle: ClientLifecycle, row: AppUserRow): string {
+  const subscriptionStatus = prettyStatus(row.subscription_status);
+  if (lifecycle === 'returning' && subscriptionStatus) return `Returning / ${subscriptionStatus}`;
+  if (lifecycle === 'existing') return 'Existing client';
+  if (lifecycle === 'first_session_booked') return 'First session booked';
+  if (lifecycle === 'new') return 'New client';
+  return 'Returning client';
+}
+
+function clientLifecyclePayment(row: AppUserRow): string {
+  const subscriptionStatus = prettyStatus(row.subscription_status);
+  if (subscriptionStatus) return `Subscription ${subscriptionStatus}`;
+  if (row.stripe_customer_id) return 'Billing on file';
+  return 'No billing yet';
+}
+
+function toAdminClientSummary(row: AppUserRow, bookingHistory: ClientLifecycleBooking[] = []): AdminClientSummary {
   const subscriptionStatus = prettyStatus(row.subscription_status);
   const name = row.full_name?.trim() || row.email;
   const manual = row.clerk_user_id.startsWith('manual:');
+  const lifecycle = clientLifecycleFromHistory({
+    manual,
+    hasSubscription: Boolean(row.stripe_subscription_id || subscriptionStatus),
+    bookings: bookingHistory,
+  });
 
   return {
     id: row.id,
     name,
     email: row.email,
     phone: row.phone,
-    status: manual ? 'Existing client' : subscriptionStatus ? `Subscription ${subscriptionStatus}` : 'Client account',
-    goal: row.stripe_subscription_id ? 'Subscription client' : 'Client profile',
-    payment: subscriptionStatus
-      ? `Subscription ${subscriptionStatus}`
-      : row.stripe_customer_id
-        ? 'Billing on file'
-        : 'No billing yet',
+    lifecycle,
+    status: clientLifecycleStatus(lifecycle, row),
+    goal: clientLifecycleGoal(lifecycle, row),
+    payment: clientLifecyclePayment(row),
+    profileGoal: row.profile_goal,
+    emergencyContactName: row.emergency_contact_name,
+    emergencyContactPhone: row.emergency_contact_phone,
     manual,
   };
 }
@@ -385,14 +460,24 @@ export function adminClientSummariesFromBookings(bookings: AdminBookingSummary[]
     const email = booking.clientEmail?.trim().toLowerCase() || null;
     const name = rawName ? adminBookingClientName(booking) : booking.clientEmail?.trim();
     if (!name && !email) continue;
+    const lifecycle = clientLifecycleFromHistory({
+      bookings: [
+        {
+          service_type: booking.serviceType,
+          status: booking.status,
+          starts_at: booking.startsAt,
+        },
+      ],
+    });
 
     const client: AdminClientSummary = {
       id: `booking:${booking.id}`,
       name: name || email || 'Booked client',
       email,
       phone: booking.clientPhone,
-      status: booking.status === 'pending_payment' ? 'Payment pending' : 'Booked appointment',
-      goal: booking.serviceLabel || 'Appointment client',
+      lifecycle,
+      status: lifecycle === 'first_session_booked' ? 'First session booked' : 'Booked appointment',
+      goal: booking.serviceType === 'free' ? clientLifecycleLabel(lifecycle) : booking.serviceLabel || 'Appointment client',
       payment: booking.status === 'pending_payment' ? 'Payment pending' : 'Booking history',
     };
     const key = adminClientRosterKey(client);
@@ -433,6 +518,17 @@ export function mergeAdminClientSummaries(
     rememberClient(adminClientRosterKey(client), client);
   }
   return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function bookingHistoryForClient(
+  client: AppUserRow,
+  bookingRows: ClientLifecycleBookingRow[]
+): ClientLifecycleBooking[] {
+  const email = client.email.trim().toLowerCase();
+  return bookingRows.filter((booking) => {
+    if (booking.app_user_id === client.id) return true;
+    return booking.client_email?.trim().toLowerCase() === email;
+  });
 }
 
 export function manualClerkUserId(seed = crypto.randomUUID()): string {
@@ -479,10 +575,59 @@ export function normalizeAdminClientInput(input: CreateAdminClientInput): {
   };
 }
 
+function normalizeProfileText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  return normalized || null;
+}
+
+export function normalizeClientProfileInput(input: UpdateClientProfileInput): {
+  fullName: string | null;
+  phone: string | null;
+  profileGoal: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+} {
+  const fullName = normalizeProfileText(input.fullName);
+  const profileGoal = normalizeProfileText(input.profileGoal);
+  const emergencyContactName = normalizeProfileText(input.emergencyContactName);
+
+  return {
+    fullName,
+    phone: normalizeClientPhoneInput(input.phone),
+    profileGoal,
+    emergencyContactName,
+    emergencyContactPhone: normalizeClientPhoneInput(input.emergencyContactPhone),
+  };
+}
+
 export function normalizeAdminClientLimit(value: unknown = 80): number {
   const limit = Number(value);
   if (!Number.isFinite(limit)) return 80;
   return Math.min(Math.max(Math.trunc(limit), 1), 200);
+}
+
+export async function updateClientProfile(
+  appUser: Pick<AppUserRow, 'id'>,
+  input: UpdateClientProfileInput
+): Promise<AppUserRow> {
+  const normalized = normalizeClientProfileInput(input);
+  const { data, error } = await serviceClient()
+    .from('app_users')
+    .update({
+      full_name: normalized.fullName,
+      phone: normalized.phone,
+      profile_goal: normalized.profileGoal,
+      emergency_contact_name: normalized.emergencyContactName,
+      emergency_contact_phone: normalized.emergencyContactPhone,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', appUser.id)
+    .select(APP_USER_SELECT)
+    .single();
+
+  if (error) throw error;
+  return data as AppUserRow;
 }
 
 async function reportBookingIncident(input: {
@@ -517,6 +662,186 @@ async function markBookingCancelled(bookingId: string): Promise<void> {
     .eq('id', bookingId);
 
   if (error) throw error;
+}
+
+type BookingOwner = Pick<AppUserRow, 'id' | 'clerk_user_id' | 'email'>;
+
+const CLIENT_ACTIVE_BOOKING_STATUSES: BookingStatus[] = ['held', 'pending_payment', 'confirmed', 'rescheduled'];
+const LATE_CANCELLATION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function bookingBelongsToUser(booking: BookingRow, appUser: BookingOwner): boolean {
+  const email = appUser.email.trim().toLowerCase();
+  return (
+    booking.app_user_id === appUser.id ||
+    booking.clerk_user_id === appUser.clerk_user_id ||
+    booking.client_email?.trim().toLowerCase() === email
+  );
+}
+
+function isLateBookingChange(startsAt: string, now = new Date()): boolean {
+  const start = new Date(startsAt);
+  if (Number.isNaN(start.getTime())) return false;
+  return start.getTime() - now.getTime() < LATE_CANCELLATION_WINDOW_MS;
+}
+
+function cancellationPolicyMetadata(metadata: Record<string, unknown>, input: {
+  cancelledAt: string;
+  cancelledBy: 'client' | 'admin';
+  late: boolean;
+  courtesyUsed: boolean;
+}): Record<string, unknown> {
+  return {
+    ...metadata,
+    cancellationPolicy: {
+      cancelledAt: input.cancelledAt,
+      cancelledBy: input.cancelledBy,
+      late: input.late,
+      courtesyUsed: input.courtesyUsed,
+    },
+  };
+}
+
+function metadataUsedLateCourtesy(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object') return false;
+  const policy = (metadata as { cancellationPolicy?: unknown }).cancellationPolicy;
+  if (!policy || typeof policy !== 'object') return false;
+  return Boolean(
+    (policy as { late?: unknown; courtesyUsed?: unknown }).late &&
+      (policy as { courtesyUsed?: unknown }).courtesyUsed
+  );
+}
+
+async function clientBookingRows(
+  appUser: BookingOwner,
+  statuses: BookingStatus[],
+  limit = 30
+): Promise<BookingRow[]> {
+  const sb = serviceClient();
+  const queries = [
+    sb.from('bookings').select(BOOKING_SELECT).eq('app_user_id', appUser.id).in('status', statuses).limit(limit),
+    sb
+      .from('bookings')
+      .select(BOOKING_SELECT)
+      .eq('clerk_user_id', appUser.clerk_user_id)
+      .in('status', statuses)
+      .limit(limit),
+    sb
+      .from('bookings')
+      .select(BOOKING_SELECT)
+      .eq('client_email', appUser.email.trim().toLowerCase())
+      .in('status', statuses)
+      .limit(limit),
+  ];
+
+  const results = await Promise.all(queries);
+  for (const result of results) {
+    if (result.error) throw result.error;
+  }
+
+  const byId = new Map<string, BookingRow>();
+  for (const result of results) {
+    for (const row of (result.data ?? []) as BookingRow[]) {
+      byId.set(row.id, row);
+    }
+  }
+
+  return [...byId.values()].sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+}
+
+async function lateClientCancellationCount(appUser: BookingOwner, excludeBookingId?: string): Promise<number> {
+  const rows = await clientBookingRows(appUser, ['cancelled'], 100);
+  return rows.filter((row) => row.id !== excludeBookingId && metadataUsedLateCourtesy(row.metadata)).length;
+}
+
+function toClientBookingSummary(
+  booking: BookingRow,
+  priorLateCancellationCount: number,
+  now = new Date()
+): ClientBookingSummary {
+  const summary = toAdminBookingSummary(booking);
+  const upcoming = new Date(booking.starts_at).getTime() > now.getTime();
+  const active = CLIENT_ACTIVE_BOOKING_STATUSES.includes(booking.status);
+  const lateCancellation = isLateBookingChange(booking.starts_at, now);
+  const lateCancellationBlocked = lateCancellation && priorLateCancellationCount > 0;
+
+  return {
+    ...summary,
+    canCancel: upcoming && active && !lateCancellationBlocked,
+    lateCancellation,
+    lateCancellationBlocked,
+  };
+}
+
+export async function listClientBookings(appUser: BookingOwner, limit = 20): Promise<ClientBookingSummary[]> {
+  const [rows, priorLateCancellationCount] = await Promise.all([
+    clientBookingRows(appUser, CLIENT_ACTIVE_BOOKING_STATUSES, limit),
+    lateClientCancellationCount(appUser),
+  ]);
+
+  return rows.slice(0, limit).map((row) => toClientBookingSummary(row, priorLateCancellationCount));
+}
+
+export async function cancelClientBooking(
+  appUser: BookingOwner,
+  bookingId: string
+): Promise<{ booking: ClientBookingSummary; lateCourtesyUsed: boolean; calendarDeleted: boolean }> {
+  const { data, error } = await serviceClient()
+    .from('bookings')
+    .select(BOOKING_SELECT)
+    .eq('id', bookingId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error('Booking not found');
+
+  const row = data as BookingRow;
+  if (!bookingBelongsToUser(row, appUser)) throw new Error('Booking not found');
+  if (!CLIENT_ACTIVE_BOOKING_STATUSES.includes(row.status)) throw new Error('This booking cannot be cancelled.');
+
+  const now = new Date();
+  if (new Date(row.starts_at).getTime() <= now.getTime()) {
+    throw new Error('Past sessions cannot be cancelled from the app.');
+  }
+
+  const lateCancellation = isLateBookingChange(row.starts_at, now);
+  const priorLateCancellationCount = await lateClientCancellationCount(appUser, row.id);
+  if (lateCancellation && priorLateCancellationCount > 0) {
+    throw new Error('This session is inside 24 hours and the courtesy late cancellation has already been used. Message Ashley to change it.');
+  }
+
+  let calendarDeleted = false;
+  if (row.google_event_id) {
+    const result = await deleteCalendarEvent(row.google_event_id);
+    if (!result.ok) throw new Error(result.reason);
+    calendarDeleted = true;
+  }
+
+  const cancelledAt = now.toISOString();
+  const metadata = cancellationPolicyMetadata(row.metadata ?? {}, {
+    cancelledAt,
+    cancelledBy: 'client',
+    late: lateCancellation,
+    courtesyUsed: lateCancellation,
+  });
+  const updated = await serviceClient()
+    .from('bookings')
+    .update({
+      status: 'cancelled',
+      cancelled_at: cancelledAt,
+      metadata,
+      updated_at: cancelledAt,
+    })
+    .eq('id', row.id)
+    .select(BOOKING_SELECT)
+    .single();
+
+  if (updated.error) throw updated.error;
+
+  return {
+    booking: toClientBookingSummary(updated.data as BookingRow, priorLateCancellationCount + (lateCancellation ? 1 : 0), now),
+    lateCourtesyUsed: lateCancellation,
+    calendarDeleted,
+  };
 }
 
 async function reconcileCalendarDeletedBookings(rows: BookingRow[]): Promise<BookingRow[]> {
@@ -567,7 +892,32 @@ export async function listAdminClients(limit: unknown = 80): Promise<AdminClient
     .limit(cappedLimit);
 
   if (error) throw error;
-  const profileClients = ((data ?? []) as AppUserRow[]).map(toAdminClientSummary);
+  const appUsers = (data ?? []) as AppUserRow[];
+  const appUserIds = appUsers.map((row) => row.id);
+  const emails = appUsers.map((row) => row.email).filter(Boolean);
+  const [bookingsByUser, bookingsByEmail] = await Promise.all([
+    appUserIds.length
+      ? sb
+          .from('bookings')
+          .select('app_user_id, client_email, service_type, status, starts_at')
+          .in('app_user_id', appUserIds)
+      : Promise.resolve({ data: [], error: null }),
+    emails.length
+      ? sb
+          .from('bookings')
+          .select('app_user_id, client_email, service_type, status, starts_at')
+          .in('client_email', emails)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (bookingsByUser.error) throw bookingsByUser.error;
+  if (bookingsByEmail.error) throw bookingsByEmail.error;
+
+  const historyRows = [
+    ...((bookingsByUser.data ?? []) as ClientLifecycleBookingRow[]),
+    ...((bookingsByEmail.data ?? []) as ClientLifecycleBookingRow[]),
+  ];
+  const profileClients = appUsers.map((row) => toAdminClientSummary(row, bookingHistoryForClient(row, historyRows)));
 
   const bookingRows = await sb
     .from('bookings')
@@ -668,10 +1018,59 @@ export async function createAdminClient(input: CreateAdminClientInput): Promise<
     : false;
 
   return {
-    client: toAdminClientSummary(row),
+    client: toAdminClientSummary(row, []),
     accessBookingCreated,
     created,
   };
+}
+
+export async function updateAdminClient(
+  clientId: string,
+  input: CreateAdminClientInput & UpdateClientProfileInput
+): Promise<{ client: AdminClientSummary }> {
+  const existing = await serviceClient()
+    .from('app_users')
+    .select(APP_USER_SELECT)
+    .eq('id', clientId)
+    .maybeSingle();
+
+  if (existing.error) throw existing.error;
+  if (!existing.data) throw new Error('Client not found');
+  if (existing.data.role !== 'client') throw new Error('Only client profiles can be edited in StryvAdmin.');
+
+  const current = existing.data as AppUserRow;
+  const normalized = normalizeClientProfileInput({
+    fullName: input.fullName ?? current.full_name,
+    phone: input.phone ?? current.phone,
+    profileGoal: input.profileGoal ?? current.profile_goal,
+    emergencyContactName: input.emergencyContactName ?? current.emergency_contact_name,
+    emergencyContactPhone: input.emergencyContactPhone ?? current.emergency_contact_phone,
+  });
+  const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : current.email;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Enter a valid client email.');
+  }
+  if (!current.clerk_user_id.startsWith('manual:') && email !== current.email) {
+    throw new Error('Signed-in client email is managed through Clerk.');
+  }
+
+  const updated = await serviceClient()
+    .from('app_users')
+    .update({
+      email,
+      full_name: normalized.fullName,
+      phone: normalized.phone,
+      profile_goal: normalized.profileGoal,
+      emergency_contact_name: normalized.emergencyContactName,
+      emergency_contact_phone: normalized.emergencyContactPhone,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', clientId)
+    .select(APP_USER_SELECT)
+    .single();
+
+  if (updated.error) throw updated.error;
+  return { client: toAdminClientSummary(updated.data as AppUserRow, []) };
 }
 
 export async function deleteAdminClient(clientId: string): Promise<{ clientId: string }> {
@@ -691,6 +1090,150 @@ export async function deleteAdminClient(clientId: string): Promise<{ clientId: s
   if (removed.error) throw removed.error;
 
   return { clientId };
+}
+
+function normalizeAdminBookingInput(input: CreateAdminBookingInput): {
+  clientId: string | null;
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string | null;
+  serviceType: BookingServiceType;
+  startsAt: Date;
+  durationMinutes: number;
+} {
+  const clientId = typeof input.clientId === 'string' && UUID_RE.test(input.clientId) ? input.clientId : null;
+  const clientName = normalizeProfileText(input.clientName) ?? '';
+  const clientEmail = typeof input.clientEmail === 'string' ? input.clientEmail.trim().toLowerCase() : '';
+  if (!clientId && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) {
+    throw new Error('Choose a saved client or enter a client email.');
+  }
+
+  const startsAt = normalizeBookingDate(input.startsAt);
+  if (!startsAt) throw new Error('Appointment date is invalid.');
+
+  const durationMinutes = normalizeEditableDuration(input.durationMinutes, 60);
+
+  return {
+    clientId,
+    clientName: clientName || clientEmail || 'StryvFit+ client',
+    clientEmail,
+    clientPhone: normalizeClientPhoneInput(input.clientPhone),
+    serviceType: parseBookingService(input.serviceType),
+    startsAt,
+    durationMinutes,
+  };
+}
+
+async function ensureAdminBookingClient(input: ReturnType<typeof normalizeAdminBookingInput>): Promise<AppUserRow | null> {
+  const sb = serviceClient();
+  if (input.clientId) {
+    const existing = await sb.from('app_users').select(APP_USER_SELECT).eq('id', input.clientId).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) throw new Error('Client not found');
+    if (existing.data.role !== 'client') throw new Error('Only client profiles can be scheduled.');
+    return existing.data as AppUserRow;
+  }
+
+  const existing = await sb.from('app_users').select(APP_USER_SELECT).eq('email', input.clientEmail).maybeSingle();
+  if (existing.error) throw existing.error;
+  if (existing.data) {
+    if (existing.data.role !== 'client') throw new Error('That email belongs to a staff account.');
+    return existing.data as AppUserRow;
+  }
+
+  const inserted = await sb
+    .from('app_users')
+    .insert({
+      clerk_user_id: manualClerkUserId(),
+      email: input.clientEmail,
+      full_name: input.clientName,
+      phone: input.clientPhone,
+      role: 'client',
+      profile_goal: 'Trainer-scheduled client',
+    })
+    .select(APP_USER_SELECT)
+    .single();
+  if (inserted.error) throw inserted.error;
+  return inserted.data as AppUserRow;
+}
+
+async function deleteBookingRow(bookingId: string): Promise<void> {
+  const { error } = await serviceClient().from('bookings').delete().eq('id', bookingId);
+  if (error) throw error;
+}
+
+function calendarInputForBooking(booking: BookingRow): Parameters<typeof createCalendarEvent>[0] {
+  const service = BOOKING_SERVICES[booking.service_type];
+  return {
+    bookingId: booking.id,
+    title: `StryvFit+: ${service.label}`,
+    description: service.description,
+    startsAt: booking.starts_at,
+    endsAt: booking.ends_at,
+    attendeeEmail: booking.client_email,
+    attendeeName: booking.client_name,
+  };
+}
+
+export async function createAdminBooking(
+  input: CreateAdminBookingInput,
+  admin?: Pick<AppUserRow, 'id' | 'email'>
+): Promise<{ booking: AdminBookingSummary }> {
+  const normalized = normalizeAdminBookingInput(input);
+  const startsAt = normalized.startsAt;
+  const endsAt = new Date(startsAt.getTime() + normalized.durationMinutes * 60_000);
+  const availability = await assertSlotAvailable(startsAt.toISOString(), endsAt.toISOString());
+  if (!availability.ok) throw new Error(availability.reason);
+
+  const client = await ensureAdminBookingClient(normalized);
+  const clientEmail = client?.email ?? normalized.clientEmail;
+  const clientName = client?.full_name ?? normalized.clientName;
+  const clientPhone = client?.phone ?? normalized.clientPhone;
+  const inserted = await serviceClient()
+    .from('bookings')
+    .insert({
+      app_user_id: client?.id ?? null,
+      clerk_user_id: client?.clerk_user_id ?? null,
+      service_type: normalized.serviceType,
+      status: 'confirmed',
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt.toISOString(),
+      duration_minutes: normalized.durationMinutes,
+      timezone: process.env.BOOKING_TIMEZONE ?? 'America/New_York',
+      client_email: clientEmail,
+      client_name: clientName,
+      client_phone: clientPhone,
+      confirmed_at: new Date().toISOString(),
+      metadata: {
+        source: 'stryvadmin-manual-schedule',
+        createdByUserId: admin?.id ?? null,
+        createdByEmail: admin?.email ?? null,
+      },
+    })
+    .select(BOOKING_SELECT)
+    .single();
+
+  if (inserted.error) throw inserted.error;
+  const booking = inserted.data as BookingRow;
+  const googleEventId = await createCalendarEvent(calendarInputForBooking(booking));
+  if (!googleEventId) {
+    await deleteBookingRow(booking.id);
+    throw new Error('Google Calendar event could not be created. No appointment was saved.');
+  }
+
+  const updated = await serviceClient()
+    .from('bookings')
+    .update({
+      google_event_id: googleEventId,
+      google_calendar_id: process.env.GOOGLE_CALENDAR_ID ?? 'primary',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', booking.id)
+    .select(BOOKING_SELECT)
+    .single();
+
+  if (updated.error) throw updated.error;
+  return { booking: toAdminBookingSummary(updated.data as BookingRow) };
 }
 
 export async function listAdminBookings(limit = 30): Promise<AdminBookingSummary[]> {
@@ -732,12 +1275,11 @@ export async function cancelBooking(bookingId: string): Promise<{
 
   const row = data as BookingRow;
   let calendarDeleted = false;
-  let calendarWarning: string | undefined;
 
   if (row.google_event_id) {
     const result = await deleteCalendarEvent(row.google_event_id);
-    calendarDeleted = result.ok;
-    if (!result.ok) calendarWarning = result.reason;
+    if (!result.ok) throw new Error(result.reason);
+    calendarDeleted = true;
   }
 
   await markBookingCancelled(row.id);
@@ -745,7 +1287,6 @@ export async function cancelBooking(bookingId: string): Promise<{
   return {
     booking: toAdminBookingSummary({ ...row, status: 'cancelled' }),
     calendarDeleted,
-    calendarWarning,
   };
 }
 
@@ -761,7 +1302,7 @@ function normalizeEditableDuration(value: unknown, fallback: number): number {
 export async function updateBooking(
   bookingId: string,
   input: UpdateBookingInput
-): Promise<{ booking: AdminBookingSummary; calendarWarning?: string }> {
+): Promise<{ booking: AdminBookingSummary; calendarUpdated: boolean; calendarDeleted: boolean }> {
   const { data, error } = await serviceClient()
     .from('bookings')
     .select(BOOKING_SELECT)
@@ -792,6 +1333,31 @@ export async function updateBooking(
     duration_minutes: durationMinutes,
     updated_at: new Date().toISOString(),
   };
+  const nextBooking: BookingRow = {
+    ...row,
+    client_name: updates.client_name,
+    client_email: updates.client_email,
+    client_phone: updates.client_phone,
+    service_type: updates.service_type,
+    status: updates.status,
+    starts_at: updates.starts_at,
+    ends_at: updates.ends_at,
+    duration_minutes: updates.duration_minutes,
+  };
+  let calendarUpdated = false;
+  let calendarDeleted = false;
+
+  if (row.google_event_id) {
+    if (updates.status === 'cancelled' || updates.status === 'expired') {
+      const result = await deleteCalendarEvent(row.google_event_id);
+      if (!result.ok) throw new Error(result.reason);
+      calendarDeleted = true;
+    } else {
+      const result = await updateCalendarEvent(row.google_event_id, calendarInputForBooking(nextBooking));
+      if (!result.ok) throw new Error(result.reason);
+      calendarUpdated = true;
+    }
+  }
 
   const updated = await serviceClient()
     .from('bookings')
@@ -804,9 +1370,8 @@ export async function updateBooking(
 
   return {
     booking: toAdminBookingSummary(updated.data as BookingRow),
-    calendarWarning: row.google_event_id
-      ? 'Update the matching Google Calendar event if the date or time changed.'
-      : undefined,
+    calendarUpdated,
+    calendarDeleted,
   };
 }
 
