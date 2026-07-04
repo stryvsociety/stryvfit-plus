@@ -145,6 +145,54 @@ describe('admin surface regressions', () => {
     expect(bookingsSource).toContain('updateCalendarEvent(row.google_event_id');
     expect(bookingsSource).toContain('if (!result.ok) throw new Error(result.reason);');
   });
+
+  test('keeps paid checkout returns confirming bookings and billing before the client sees the calendar again', () => {
+    const bookPageSource = readFileSync(join(appRoot, 'src/app/book/page.tsx'), 'utf8');
+    const checkoutSource = readFileSync(join(appRoot, 'src/app/api/bookings/checkout/route.ts'), 'utf8');
+    const bookingsSource = readFileSync(join(appRoot, 'src/lib/bookings.ts'), 'utf8');
+    const billingSource = readFileSync(join(appRoot, 'src/lib/billing.ts'), 'utf8');
+    const clientSource = readFileSync(join(appRoot, 'src/components/client/ClientPhaseFlow.tsx'), 'utf8');
+    const schedulerSource = readFileSync(join(appRoot, 'src/components/scheduling/GoogleScheduler.tsx'), 'utf8');
+
+    expect(bookPageSource).toContain('confirmPaidBookingReturn');
+    expect(bookPageSource).toContain("redirect('/book?booking=confirmed&intent=first-session')");
+    expect(bookPageSource).toContain("redirect('/book?booking=calendar_pending&intent=first-session')");
+    expect(checkoutSource).toContain("success_url: appUrl('/book?booking=success&intent=first-session&session_id={CHECKOUT_SESSION_ID}')");
+    expect(checkoutSource).toContain("cancel_url: appUrl('/book?booking=cancelled&intent=first-session')");
+    expect(bookingsSource).toContain('confirmBookingFromStripe(session)');
+    expect(bookingsSource).toContain('ensureGoogleEvent(booking)');
+    expect(bookingsSource).toContain('session.client_reference_id');
+    expect(billingSource).toContain('session.metadata?.booking_id ?? session.client_reference_id');
+    expect(clientSource).toContain('You are booked. The team is finalizing your calendar invite.');
+    expect(clientSource).toContain('Opening secure checkout. Stripe will collect your payment details next.');
+    expect(schedulerSource).toContain('const bookingButtonDisabled = bookingPending || slotsLoading;');
+    expect(schedulerSource).toContain('disabled={bookingButtonDisabled}');
+    expect(schedulerSource).toContain('Secure checkout opens next');
+    expect(schedulerSource).toContain("setBookingError('Enter a mobile number before booking.')");
+  });
+
+  test('keeps the first-session guided booking flow full-screen and wired to real checkout and notices', () => {
+    const bookPageSource = readFileSync(join(appRoot, 'src/app/book/page.tsx'), 'utf8');
+    const flowSource = readFileSync(join(appRoot, 'src/components/booking/FirstSessionBookingFlow.tsx'), 'utf8');
+    const checkoutSource = readFileSync(join(appRoot, 'src/app/api/bookings/checkout/route.ts'), 'utf8');
+    const authSource = readFileSync(join(appRoot, 'src/lib/auth.ts'), 'utf8');
+    const noticeSource = readFileSync(join(appRoot, 'src/lib/bookingNotifications.ts'), 'utf8');
+
+    expect(bookPageSource).toContain('<FirstSessionBookingFlow');
+    expect(flowSource).toContain("type BookingStep = 'basic' | 'date' | 'time' | 'package' | 'payment'");
+    expect(flowSource).toContain("label: 'Basic Info'");
+    expect(flowSource).toContain("label: 'Choose Package'");
+    expect(flowSource).toContain('communicationPreference');
+    expect(flowSource).toContain('Agree & Open Stripe');
+    expect(flowSource).toContain('window.location.href = payload.checkoutUrl');
+    expect(checkoutSource).toContain('sendBookingCompletionNotice');
+    expect(checkoutSource).toContain("communicationPreference === 'text'");
+    expect(authSource).toContain('abandoned pending Stripe holds');
+    expect(noticeSource).toContain('https://api.resend.com/emails');
+    expect(noticeSource).toContain('BOOKING_TEXT_WEBHOOK_URL');
+    expect(noticeSource).toContain('idempotencyKey');
+    expect(noticeSource).toContain('completionNotice');
+  });
 });
 
 function scanFiles(paths: string[], patterns: RegExp[]) {

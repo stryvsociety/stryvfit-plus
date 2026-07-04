@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { confirmBookingFromStripe, ensureGoogleEvent, expireBookingForStripeSession } from '@/lib/bookings';
 import { syncStripeSubscriptionBilling } from '@/lib/billing';
+import { sendBookingCompletionNotice } from '@/lib/bookingNotifications';
 import { billingNoticeReasonForSubscription, sendBillingRecoveryNotice } from '@/lib/billingNotifications';
 import { serviceClient } from '@/lib/supabase';
 import { stripe } from '@/lib/stripeClient';
@@ -53,7 +54,12 @@ export async function POST(req: Request) {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
     const booking = await confirmBookingFromStripe(session);
-    if (booking) await ensureGoogleEvent(booking).catch(() => null);
+    if (booking) {
+      const googleEventId = await ensureGoogleEvent(booking).catch(() => null);
+      await sendBookingCompletionNotice(booking, {
+        calendarStatus: googleEventId ? 'created' : 'pending',
+      }).catch(() => null);
+    }
   }
 
   if (event.type === 'checkout.session.expired') {

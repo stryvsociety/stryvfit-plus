@@ -165,27 +165,38 @@ export async function requireAppUser(): Promise<AppUser> {
   return appUser;
 }
 
+function bookingSatisfiesFirstSessionGate(row: { service_type?: string | null; status?: string | null }): boolean {
+  if (!row.status) return false;
+  if (row.service_type === 'free') {
+    return FIRST_SESSION_OFFER_CONSUMING_STATUSES.includes(
+      row.status as (typeof FIRST_SESSION_OFFER_CONSUMING_STATUSES)[number]
+    );
+  }
+  return ['confirmed', 'rescheduled', 'completed', 'no_show'].includes(row.status);
+}
+
 export async function hasBookedFreeFirstSession(appUser: AppUser): Promise<boolean> {
+  // The first-session gate is consumed by confirmed paid package history too, but not by
+  // abandoned pending Stripe holds.
   const { data, error } = await serviceClient()
     .from('bookings')
-    .select('id')
+    .select('id, service_type, status')
     .eq('app_user_id', appUser.id)
-    .eq('service_type', 'free')
-    .in('status', [...FIRST_SESSION_OFFER_CONSUMING_STATUSES])
-    .limit(1);
+    .in('status', [...FIRST_SESSION_OFFER_CONSUMING_STATUSES, 'confirmed'])
+    .limit(10);
 
   if (error) throw error;
-  if ((data?.length ?? 0) > 0) return true;
+  if ((data ?? []).some(bookingSatisfiesFirstSessionGate)) return true;
 
   const existingClientBooking = await serviceClient()
     .from('bookings')
-    .select('id')
+    .select('id, service_type, status')
     .eq('client_email', appUser.email)
     .in('status', [...FIRST_SESSION_OFFER_CONSUMING_STATUSES])
-    .limit(1);
+    .limit(10);
 
   if (existingClientBooking.error) throw existingClientBooking.error;
-  return (existingClientBooking.data?.length ?? 0) > 0;
+  return (existingClientBooking.data ?? []).some(bookingSatisfiesFirstSessionGate);
 }
 
 export async function requireFirstSessionBooked(): Promise<AppUser> {

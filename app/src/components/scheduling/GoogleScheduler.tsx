@@ -278,12 +278,18 @@ export function GoogleScheduler({
   const bookingButtonLabel = slotsLoading
     ? 'Loading Times'
     : bookingPending
-      ? 'Checking Slot'
+      ? serviceType === 'free'
+        ? 'Confirming Booking'
+        : 'Opening Checkout'
       : sessionBooked
         ? 'Session Booked'
         : bookingCtaLabel;
   const bookingButtonSubtext = sessionBooked
     ? 'Confirmation started'
+    : bookingPending
+      ? serviceType === 'free'
+        ? 'Finalizing your session'
+        : 'Secure checkout opens next'
     : requiresMobile && !normalizedClientPhone
       ? 'Mobile required'
     : requiresConsentAcknowledgement && !consentAcknowledged
@@ -291,6 +297,7 @@ export function GoogleScheduler({
       : serviceType === 'free'
         ? 'No card required'
         : 'Secure checkout';
+  const bookingButtonDisabled = bookingPending || slotsLoading;
 
   useEffect(() => {
     if (!manageAvailability) return;
@@ -932,12 +939,7 @@ export function GoogleScheduler({
         <button
           type="button"
           onClick={bookSelectedSession}
-          disabled={
-            bookingPending ||
-            slotsLoading ||
-            (requiresConsentAcknowledgement && !consentAcknowledged) ||
-            (requiresMobile && !normalizedClientPhone)
-          }
+          disabled={bookingButtonDisabled}
           className="ios-pill mt-5 inline-flex min-h-14 w-full flex-col items-center justify-center rounded-full bg-gold px-4 text-bg transition-colors hover:bg-gold-deep disabled:cursor-not-allowed disabled:opacity-55"
         >
           <span className="font-control text-sm font-semibold uppercase tracking-[0.08em]">

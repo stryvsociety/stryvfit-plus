@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { syncStripeSessionBilling } from '@/lib/billing';
+import { sendBookingCompletionNotice } from '@/lib/bookingNotifications';
 import { buildAvailableTimesForDate } from '@/lib/bookingAvailability';
 import { getBookingAvailability, slotPartsInBookingTz } from '@/lib/bookingAvailabilityStore';
 import { BOOKING_CONSENT_FORM_URL, bookingRequiresConsent } from '@/lib/bookingConsent';
@@ -25,6 +26,7 @@ import {
   listBusyWindows,
   updateCalendarEvent,
 } from '@/lib/googleCalendarOfficial';
+import { stripe } from '@/lib/stripeClient';
 import { serviceClient } from '@/lib/supabase';
 
 export type BookingStatus =
@@ -36,6 +38,8 @@ export type BookingStatus =
   | 'completed'
   | 'no_show'
   | 'expired';
+
+export type BookingCommunicationPreference = 'email' | 'text';
 
 export type BookingRow = {
   id: string;
@@ -96,6 +100,7 @@ type CreateBookingInput = {
   clientEmail: string;
   clientName: string | null;
   clientPhone?: string | null;
+  communicationPreference?: BookingCommunicationPreference;
   serviceType: BookingServiceType;
   consentAcknowledged?: boolean;
   consentFormUrl?: string;
@@ -168,11 +173,20 @@ export function normalizeBookingDate(value: unknown): Date | null {
 
 export function buildBookingMetadata(input: {
   serviceType: BookingServiceType;
+  communicationPreference?: BookingCommunicationPreference;
+  communicationEmail?: string | null;
+  communicationPhone?: string | null;
   consentAcknowledged?: boolean;
   consentFormUrl?: string;
   consentAcknowledgedAt?: string;
 }): Record<string, unknown> {
   const metadata: Record<string, unknown> = { source: 'stryvfit-booking-flow' };
+  metadata.communication = {
+    preferredChannel: input.communicationPreference ?? 'email',
+    email: input.communicationEmail?.trim().toLowerCase() || null,
+    phone: normalizeClientPhoneInput(input.communicationPhone),
+    selectedAt: new Date().toISOString(),
+  };
   if (bookingRequiresConsent(input.serviceType)) {
     metadata.consent = {
       required: true,
@@ -299,6 +313,9 @@ export async function createBookingHold(input: CreateBookingInput): Promise<Book
       hold_expires_at: status === 'pending_payment' ? expiresAt : null,
       metadata: buildBookingMetadata({
         serviceType: input.serviceType,
+        communicationPreference: input.communicationPreference,
+        communicationEmail: input.clientEmail,
+        communicationPhone: input.clientPhone,
         consentAcknowledged: input.consentAcknowledged,
         consentFormUrl: input.consentFormUrl,
       }),
@@ -1389,7 +1406,7 @@ export async function attachStripeSession(bookingId: string, session: Stripe.Che
 }
 
 export async function confirmBookingFromStripe(session: Stripe.Checkout.Session): Promise<BookingRow | null> {
-  const bookingId = session.metadata?.booking_id;
+  const bookingId = session.metadata?.booking_id ?? session.client_reference_id;
   if (!bookingId) return null;
 
   const sb = serviceClient();
@@ -1411,6 +1428,36 @@ export async function confirmBookingFromStripe(session: Stripe.Checkout.Session)
   if (error) throw error;
   await syncStripeSessionBilling(session);
   return data as BookingRow;
+}
+
+function checkoutSessionIsPaid(session: Stripe.Checkout.Session): boolean {
+  return session.status === 'complete' && ['paid', 'no_payment_required'].includes(session.payment_status);
+}
+
+export async function confirmPaidBookingReturn(
+  appUser: BookingOwner,
+  sessionId: string
+): Promise<{ status: 'confirmed' | 'calendar_pending' | 'pending' }> {
+  if (!sessionId.startsWith('cs_')) return { status: 'pending' };
+
+  const session = await stripe().checkout.sessions.retrieve(sessionId);
+  const bookingId = session.metadata?.booking_id ?? session.client_reference_id;
+  if (!bookingId || !checkoutSessionIsPaid(session)) return { status: 'pending' };
+
+  const existing = await serviceClient().from('bookings').select(BOOKING_SELECT).eq('id', bookingId).maybeSingle();
+  if (existing.error) throw existing.error;
+  if (!existing.data || !bookingBelongsToUser(existing.data as BookingRow, appUser)) {
+    return { status: 'pending' };
+  }
+
+  const booking = await confirmBookingFromStripe(session);
+  if (!booking) return { status: 'pending' };
+
+  const googleEventId = await ensureGoogleEvent(booking);
+  await sendBookingCompletionNotice(booking, {
+    calendarStatus: googleEventId ? 'created' : 'pending',
+  }).catch(() => null);
+  return { status: googleEventId ? 'confirmed' : 'calendar_pending' };
 }
 
 export async function expireBookingForStripeSession(sessionId: string) {

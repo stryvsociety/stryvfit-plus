@@ -82,7 +82,7 @@ function safeReturnPath(path: unknown): string {
 }
 
 export async function syncStripeSessionBilling(session: Stripe.Checkout.Session): Promise<void> {
-  const bookingId = session.metadata?.booking_id;
+  const bookingId = session.metadata?.booking_id ?? session.client_reference_id;
   const customerId = stripeCustomerId(session.customer);
   const subscriptionId = stripeSubscriptionId(session.subscription);
   if (!bookingId || (!customerId && !subscriptionId)) return;

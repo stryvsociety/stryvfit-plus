@@ -29,7 +29,7 @@ Date: 2026-06-24
   - `POST https://app.stryvsocietyfit.com/api/admin/bookings` returns Clerk `401` while signed out.
   - `https://app.stryvsocietyfit.com/sign-in` server HTML includes `Sign in to your StryvFit account`.
 - Browser checks:
-  - Local `/sign-in` rendered the account-focused copy, both CTAs, and the exact bug-zap notice at desktop and 390px mobile widths.
+  - Local `/sign-in` rendered the account-focused copy and both CTAs at desktop and 390px mobile widths.
   - Local `/account` redirected unsigned users to `/sign-in`; local `/admin/pulse` redirected unsigned users to `/sign-in-admin/sign-in`.
   - Chrome extension navigation timed out before reaching localhost, so signed-in admin/account interiors were verified by build, tests, source regression coverage, route auth checks, and deployment rather than a live signed-in Chrome session.
 

@@ -135,6 +135,7 @@ export function ClientPhaseFlow({
   const [bookingMessage, setBookingMessage] = useState<string | null>(() => {
     if (bookingStatus === 'success') return 'Payment received. We are confirming your calendar event.';
     if (bookingStatus === 'confirmed') return 'You are booked. Your calendar confirmation is on the way.';
+    if (bookingStatus === 'calendar_pending') return 'You are booked. The team is finalizing your calendar invite.';
     if (bookingStatus === 'cancelled') return 'Checkout was cancelled. Your time was released.';
     return null;
   });
@@ -214,6 +215,7 @@ export function ClientPhaseFlow({
     };
 
     if (payload.checkoutUrl) {
+      setBookingMessage('Opening secure checkout. Stripe will collect your payment details next.');
       window.location.assign(payload.checkoutUrl);
       return;
     }

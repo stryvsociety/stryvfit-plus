@@ -19,12 +19,20 @@ describe('booking utilities', () => {
   test('records consent metadata for session bookings', () => {
     const metadata = buildBookingMetadata({
       serviceType: 'free',
+      communicationPreference: 'text',
+      communicationEmail: ' NIA@EXAMPLE.COM ',
+      communicationPhone: '(305) 555-0198',
       consentAcknowledged: true,
       consentAcknowledgedAt: '2026-06-01T19:30:00.000Z',
     });
 
     expect(metadata).toMatchObject({
       source: 'stryvfit-booking-flow',
+      communication: {
+        preferredChannel: 'text',
+        email: 'nia@example.com',
+        phone: '+13055550198',
+      },
       consent: {
         required: true,
         acknowledged: true,
@@ -40,7 +48,13 @@ describe('booking utilities', () => {
       consentAcknowledged: false,
     });
 
-    expect(metadata).toEqual({ source: 'stryvfit-booking-flow' });
+    expect(metadata).toMatchObject({
+      source: 'stryvfit-booking-flow',
+      communication: {
+        preferredChannel: 'email',
+      },
+    });
+    expect(metadata).not.toHaveProperty('consent');
   });
 
   test('keeps exact trainer starts instead of stepping by duration plus buffer', () => {
