@@ -33,6 +33,8 @@ type RemoteSlot = {
 };
 
 type FirstSessionBookingFlowProps = {
+  availabilityEndpoint?: string;
+  checkoutEndpoint?: string;
   initialBookingStatus?: string | null;
   initialServiceType?: BookingServiceType;
   profile: {
@@ -166,6 +168,8 @@ function stepIndex(step: BookingStep): number {
 }
 
 export function FirstSessionBookingFlow({
+  availabilityEndpoint = '/api/bookings/availability',
+  checkoutEndpoint = '/api/bookings/checkout',
   initialBookingStatus,
   initialServiceType = 'free',
   profile,
@@ -216,9 +220,11 @@ export function FirstSessionBookingFlow({
       setSlotsLoading(true);
       setSlotsError(null);
       try {
-        const res = await fetch(`/api/bookings/availability?date=${selectedDateKey}&durationMinutes=${SESSION_DURATION_MINUTES}`, {
-          cache: 'no-store',
+        const query = new URLSearchParams({
+          date: selectedDateKey,
+          durationMinutes: String(SESSION_DURATION_MINUTES),
         });
+        const res = await fetch(`${availabilityEndpoint}?${query.toString()}`, { cache: 'no-store' });
         const payload = (await res.json().catch(() => ({}))) as { times?: RemoteSlot[]; error?: string };
         if (!res.ok) throw new Error(payload.error ?? 'Unable to load available times.');
         const nextSlots = Array.isArray(payload.times) ? payload.times : [];
@@ -244,7 +250,7 @@ export function FirstSessionBookingFlow({
     return () => {
       cancelled = true;
     };
-  }, [selectedDateKey]);
+  }, [availabilityEndpoint, selectedDateKey]);
 
   function visitStep(step: BookingStep) {
     if (stepIndex(step) <= stepIndex(furthestStep)) {
@@ -297,7 +303,7 @@ export function FirstSessionBookingFlow({
     setStatusMessage(requiresPayment ? 'Creating your Stripe checkout link.' : 'Confirming your session.');
 
     try {
-      const res = await fetch('/api/bookings/checkout', {
+      const res = await fetch(checkoutEndpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
