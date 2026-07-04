@@ -14,12 +14,14 @@ export default async function SandboxBookingFlowPage({ searchParams }: SandboxBo
     <FirstSessionBookingFlow
       availabilityEndpoint="/api/sandbox/booking-availability"
       checkoutEndpoint="/api/sandbox/booking-checkout"
+      forceMobileLayout
       initialBookingStatus={bookingParam ?? null}
       profile={{
         email: 'preview@stryvsociety.test',
         fullName: 'Mobile Preview',
         phone: '',
       }}
+      showAccountActions={false}
     />
   );
 }

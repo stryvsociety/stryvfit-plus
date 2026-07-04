@@ -35,6 +35,8 @@ type RemoteSlot = {
 type FirstSessionBookingFlowProps = {
   availabilityEndpoint?: string;
   checkoutEndpoint?: string;
+  forceMobileLayout?: boolean;
+  showAccountActions?: boolean;
   initialBookingStatus?: string | null;
   initialServiceType?: BookingServiceType;
   profile: {
@@ -170,6 +172,8 @@ function stepIndex(step: BookingStep): number {
 export function FirstSessionBookingFlow({
   availabilityEndpoint = '/api/bookings/availability',
   checkoutEndpoint = '/api/bookings/checkout',
+  forceMobileLayout = false,
+  showAccountActions = true,
   initialBookingStatus,
   initialServiceType = 'free',
   profile,
@@ -359,17 +363,29 @@ export function FirstSessionBookingFlow({
         <div className="absolute inset-x-0 top-0 h-72 bg-[linear-gradient(180deg,rgba(242,79,9,0.12),transparent_70%)]" />
       </div>
 
-      <section className="relative mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 pb-6 pt-5 sm:px-6 lg:px-8">
+      <section
+        className={`relative mx-auto flex min-h-dvh w-full flex-col px-4 pb-6 pt-5 ${
+          forceMobileLayout ? 'max-w-[430px]' : 'max-w-7xl sm:px-6 lg:px-8'
+        }`}
+      >
         <header className="flex items-center justify-between gap-4">
-          <BrandWordmark className="w-[178px]" />
-          <SignOutButton compact className="bg-surface/70" />
+          <BrandWordmark className={forceMobileLayout ? 'w-[160px]' : 'w-[178px]'} />
+          {showAccountActions ? <SignOutButton compact className="bg-surface/70" /> : null}
         </header>
 
-        <div className="grid flex-1 gap-5 py-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:py-8">
-          <aside className="flex flex-col justify-between rounded-md border border-gold/15 bg-surface-2/72 p-4 shadow-glass lg:min-h-[calc(100dvh-7rem)]">
+        <div
+          className={`grid flex-1 gap-5 py-5 ${
+            forceMobileLayout ? '' : 'lg:grid-cols-[320px_minmax(0,1fr)] lg:py-8'
+          }`}
+        >
+          <aside
+            className={`flex flex-col justify-between rounded-md border border-gold/15 bg-surface-2/72 p-4 shadow-glass ${
+              forceMobileLayout ? '' : 'lg:min-h-[calc(100dvh-7rem)]'
+            }`}
+          >
             <div>
               <p className="font-caption text-[10px] uppercase tracking-[0.18em] text-gold">First session</p>
-              <h1 className="mt-3 font-section text-4xl leading-none tracking-normal text-text sm:text-5xl">
+              <h1 className={`mt-3 font-section text-4xl leading-none tracking-normal text-text ${forceMobileLayout ? '' : 'sm:text-5xl'}`}>
                 Book your training block
               </h1>
               <p className="mt-4 font-body text-sm leading-relaxed text-text-muted">
@@ -426,9 +442,14 @@ export function FirstSessionBookingFlow({
             />
           </aside>
 
-          <section className="flex min-h-[min(760px,calc(100dvh-7rem))] flex-col rounded-md border border-gold/15 bg-surface/74 p-4 shadow-glass-lg sm:p-6 lg:p-8">
+          <section
+            className={`flex min-h-[min(760px,calc(100dvh-7rem))] flex-col rounded-md border border-gold/15 bg-surface/74 p-4 shadow-glass-lg ${
+              forceMobileLayout ? '' : 'sm:p-6 lg:p-8'
+            }`}
+          >
             {statusMessage && initialBookingStatus !== 'cancelled' ? (
               <CompletionPanel
+                forceMobileLayout={forceMobileLayout}
                 showSelectionDetails={!completionFromReturn}
                 statusMessage={statusMessage}
                 selectedDate={selectedDate}
@@ -442,7 +463,7 @@ export function FirstSessionBookingFlow({
                     <p className="font-caption text-[10px] uppercase tracking-[0.18em] text-gold">
                       {steps.find((step) => step.id === activeStep)?.eyebrow}
                     </p>
-                    <h2 className="mt-2 font-section text-4xl leading-none tracking-normal text-text sm:text-5xl">
+                    <h2 className={`mt-2 font-section text-4xl leading-none tracking-normal text-text ${forceMobileLayout ? '' : 'sm:text-5xl'}`}>
                       {steps.find((step) => step.id === activeStep)?.label}
                     </h2>
                   </div>
@@ -462,6 +483,7 @@ export function FirstSessionBookingFlow({
                         communicationPreference={communicationPreference}
                         email={profile.email}
                         error={submitError}
+                        forceMobileLayout={forceMobileLayout}
                         onClientNameChange={setClientName}
                         onClientPhoneChange={setClientPhone}
                         onCommunicationPreferenceChange={setCommunicationPreference}
@@ -470,6 +492,7 @@ export function FirstSessionBookingFlow({
                       <DateStep
                         key="date"
                         dates={dateOptions}
+                        forceMobileLayout={forceMobileLayout}
                         selectedDate={selectedDate}
                         onSelectDate={setSelectedDate}
                       />
@@ -478,6 +501,7 @@ export function FirstSessionBookingFlow({
                         key="time"
                         error={submitError ?? slotsError}
                         loading={slotsLoading}
+                        forceMobileLayout={forceMobileLayout}
                         selectedDate={selectedDate}
                         selectedTime={selectedTime}
                         slots={slots}
@@ -486,6 +510,7 @@ export function FirstSessionBookingFlow({
                     ) : activeStep === 'package' ? (
                       <PackageStep
                         key="package"
+                        forceMobileLayout={forceMobileLayout}
                         selectedServiceType={serviceType}
                         onSelectService={setServiceType}
                       />
@@ -494,6 +519,7 @@ export function FirstSessionBookingFlow({
                         key="payment"
                         communicationPreference={communicationPreference}
                         error={submitError}
+                        forceMobileLayout={forceMobileLayout}
                         requiresPayment={requiresPayment}
                         selectedDate={selectedDate}
                         selectedServiceType={serviceType}
@@ -508,7 +534,11 @@ export function FirstSessionBookingFlow({
                   </AnimatePresence>
                 </div>
 
-                <footer className="mt-6 flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <footer
+                  className={`mt-6 flex flex-col-reverse gap-3 border-t border-border pt-4 ${
+                    forceMobileLayout ? '' : 'sm:flex-row sm:items-center sm:justify-between'
+                  }`}
+                >
                   <button
                     type="button"
                     onClick={() => {
@@ -549,6 +579,7 @@ function BasicInfoStep({
   communicationPreference,
   email,
   error,
+  forceMobileLayout,
   onClientNameChange,
   onClientPhoneChange,
   onCommunicationPreferenceChange,
@@ -558,12 +589,16 @@ function BasicInfoStep({
   communicationPreference: CommunicationPreference;
   email: string;
   error: string | null;
+  forceMobileLayout: boolean;
   onClientNameChange: (value: string) => void;
   onClientPhoneChange: (value: string) => void;
   onCommunicationPreferenceChange: (value: CommunicationPreference) => void;
 }) {
   return (
-    <motion.div {...stepMotion} className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+    <motion.div
+      {...stepMotion}
+      className={`grid gap-5 ${forceMobileLayout ? '' : 'lg:grid-cols-[minmax(0,1fr)_280px]'}`}
+    >
       <div className="space-y-4">
         <Field label="Full name" icon={<UserRound className="h-4 w-4" strokeWidth={1.7} />}>
           <input
@@ -620,10 +655,12 @@ function BasicInfoStep({
 
 function DateStep({
   dates,
+  forceMobileLayout,
   selectedDate,
   onSelectDate,
 }: {
   dates: Date[];
+  forceMobileLayout: boolean;
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
 }) {
@@ -632,7 +669,7 @@ function DateStep({
       <p className="max-w-2xl font-body text-sm leading-relaxed text-text-muted">
         Choose the day that gives you enough room to arrive ready. Availability refreshes as soon as you pick a date.
       </p>
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className={`mt-6 grid grid-cols-2 gap-3 ${forceMobileLayout ? '' : 'sm:grid-cols-3 xl:grid-cols-6'}`}>
         {dates.map((date) => {
           const parts = formatDateParts(date);
           const active = date.toDateString() === selectedDate.toDateString();
@@ -660,6 +697,7 @@ function DateStep({
 
 function TimeStep({
   error,
+  forceMobileLayout,
   loading,
   selectedDate,
   selectedTime,
@@ -667,6 +705,7 @@ function TimeStep({
   onSelectTime,
 }: {
   error: string | null;
+  forceMobileLayout: boolean;
   loading: boolean;
   selectedDate: Date;
   selectedTime: string | null;
@@ -686,7 +725,7 @@ function TimeStep({
           </span>
         ) : null}
       </div>
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+      <div className={`mt-6 grid grid-cols-2 gap-3 ${forceMobileLayout ? '' : 'sm:grid-cols-3 xl:grid-cols-4'}`}>
         {slots.map((slot) => {
           const active = selectedTime === slot.time;
           return (
@@ -722,9 +761,11 @@ function TimeStep({
 }
 
 function PackageStep({
+  forceMobileLayout,
   selectedServiceType,
   onSelectService,
 }: {
+  forceMobileLayout: boolean;
   selectedServiceType: BookingServiceType;
   onSelectService: (serviceType: BookingServiceType) => void;
 }) {
@@ -733,7 +774,7 @@ function PackageStep({
       <p className="max-w-2xl font-body text-sm leading-relaxed text-text-muted">
         Start with the free assessment or lock in the package you already know you want. Stripe collects payment details only after you agree to the terms.
       </p>
-      <div className="mt-6 grid gap-3 lg:grid-cols-2">
+      <div className={`mt-6 grid gap-3 ${forceMobileLayout ? '' : 'lg:grid-cols-2'}`}>
         {packageOptions.map((type) => {
           const service = BOOKING_SERVICES[type];
           const active = selectedServiceType === type;
@@ -785,6 +826,7 @@ function PackageStep({
 function PaymentStep({
   communicationPreference,
   error,
+  forceMobileLayout,
   requiresPayment,
   selectedDate,
   selectedServiceType,
@@ -797,6 +839,7 @@ function PaymentStep({
 }: {
   communicationPreference: CommunicationPreference;
   error: string | null;
+  forceMobileLayout: boolean;
   requiresPayment: boolean;
   selectedDate: Date;
   selectedServiceType: BookingServiceType;
@@ -809,12 +852,15 @@ function PaymentStep({
 }) {
   const service = BOOKING_SERVICES[selectedServiceType];
   return (
-    <motion.div {...stepMotion} className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <motion.div
+      {...stepMotion}
+      className={`grid gap-5 ${forceMobileLayout ? '' : 'xl:grid-cols-[minmax(0,1fr)_320px]'}`}
+    >
       <div>
         <p className="max-w-2xl font-body text-sm leading-relaxed text-text-muted">
           Review the appointment before the handoff. Paid packages open Stripe in the same click after the booking hold is created.
         </p>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className={`mt-6 grid gap-3 ${forceMobileLayout ? '' : 'sm:grid-cols-2'}`}>
           <ReviewTile label="Session" value={service.label} />
           <ReviewTile label="Date" value={formatLongDate(selectedDate)} />
           <ReviewTile label="Time" value={selectedTime ? formatTime(selectedTime) : 'Choose a time'} />
@@ -868,12 +914,14 @@ function PaymentStep({
 }
 
 function CompletionPanel({
+  forceMobileLayout,
   showSelectionDetails,
   statusMessage,
   selectedDate,
   selectedServiceType,
   selectedTime,
 }: {
+  forceMobileLayout: boolean;
   showSelectionDetails: boolean;
   statusMessage: string;
   selectedDate: Date;
@@ -890,7 +938,7 @@ function CompletionPanel({
         <p className="mt-6 font-caption text-[10px] uppercase tracking-[0.18em] text-gold">Booking complete</p>
         <h2 className="mt-3 font-section text-5xl leading-none tracking-normal text-text">{statusMessage}</h2>
         {showSelectionDetails ? (
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className={`mt-6 grid gap-3 ${forceMobileLayout ? '' : 'sm:grid-cols-3'}`}>
             <ReviewTile label="Session" value={service.label} />
             <ReviewTile label="Date" value={formatLongDate(selectedDate)} />
             <ReviewTile label="Time" value={selectedTime ? formatTime(selectedTime) : 'Confirmed'} />

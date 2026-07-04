@@ -24,7 +24,7 @@ export async function POST(req: Request) {
         provider: 'sandbox',
         status: 'sent',
       },
-      redirectUrl: `${origin}/sandbox/first-session-booking/flow?booking=confirmed`,
+      redirectUrl: `${origin}/sandbox/first-session-booking?booking=confirmed`,
     });
   }
 
