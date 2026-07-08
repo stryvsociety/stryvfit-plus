@@ -8,7 +8,9 @@ export function isRecoverableChunkLoadError(message: string): boolean {
     /chunkloaderror/i.test(message) ||
     /loading chunk \d+ failed/i.test(message) ||
     /\/_next\/static\/chunks\/[^\s)]+\.js/i.test(message) ||
+    /\/_next\/static\/css\/[^\s)]+\.css/i.test(message) ||
     /script .*\/_next\/static\/chunks\/.* load failed/i.test(message) ||
+    /resource .*\/_next\/static\/css\/.* load failed/i.test(message) ||
     /script .*\/__clerk\/npm\/.* load failed/i.test(message)
   );
 }
