@@ -58,3 +58,20 @@ Source ledger:
   - Tightened first-session gating so abandoned paid Stripe holds do not count as completed first-session history.
   - Added a text-webhook idempotency key for provider-side dedupe.
 - Final review pass complete.
+
+## Maintenance Recheck - 2026-07-09
+
+- SSF-001 open Linear issues remained `SSF-46`, `SSF-45`, and `SSF-44`; no newer open SSFitness bug superseded the current branch work.
+- Current branch stayed `codex/ssf-guided-booking-flow` at app fix commit `4b7d112`.
+- Required notice stayed visible with exact copy: `yesterday's bugs have been zapped`.
+- Passed: `bun test tests/client-asset-recovery.test.ts tests/admin-surface-regressions.test.ts tests/bookings.test.ts`.
+- Passed: `bun test`.
+- Passed: `bun run typecheck`.
+- Passed: `bun run lint`.
+- Passed: `bun run build`.
+- Passed: `git diff --check`.
+- Browser proof used the Codex in-app browser against `http://127.0.0.1:3001/sandbox/first-session-booking` after `localhost` returned an in-app browser HTTP failure while direct curl returned 200.
+- Desktop viewport `1280x720`: progressed Basic Info -> Choose Date -> Choose Time -> Choose Package -> Payment & Billing, clicked `Confirm Free Session` without accepting terms, and saw `Agree to the booking terms before continuing.` with no booking submission.
+- Mobile viewport `390x844`: first booking screen rendered with no framework overlay, no horizontal overflow, clean browser console logs, and the required bottom-left notice.
+- Production Clerk proxy recheck for `SSF-45`: `/__clerk/v1/environment` returned HTTP 200, and synthetic `sess_probe/touch` returned the expected HTTP 401 `signed_out` response.
+- Vercel beta deployment remained blocked: no `.vercel/project.json`, no Vercel token/org/project/beta URL values in `app/.env.local`, and the only visible SSFitness Vercel project, `ssfitness-www-app-redirect`, inspected as an `api/redirect` shim to `https://app.stryvsocietyfit.com/` rather than an app beta target.
