@@ -75,3 +75,14 @@ Source ledger:
 - Mobile viewport `390x844`: first booking screen rendered with no framework overlay, no horizontal overflow, clean browser console logs, and the required bottom-left notice.
 - Production Clerk proxy recheck for `SSF-45`: `/__clerk/v1/environment` returned HTTP 200, and synthetic `sess_probe/touch` returned the expected HTTP 401 `signed_out` response.
 - Vercel beta deployment remained blocked: no `.vercel/project.json`, no Vercel token/org/project/beta URL values in `app/.env.local`, and the only visible SSFitness Vercel project, `ssfitness-www-app-redirect`, inspected as an `api/redirect` shim to `https://app.stryvsocietyfit.com/` rather than an app beta target.
+
+## Maintenance Recheck - 2026-07-11
+
+- Thread rename was unavailable, so the run report uses the required first-line fallback `SSF-001 2026-07-11 (America/New_York)`.
+- Open Linear issues remained `SSF-46`, `SSF-45`, and `SSF-44`; all were last updated during the prior maintenance run on 2026-07-09. Today's recheck comments were added without changing their states.
+- No new safe application fix surfaced. The stale Next.js CSS recovery, checkout feedback, and exact bottom-left `yesterday's bugs have been zapped` notice remain present; no unrelated user changes were touched.
+- Verification passed: `bun test` (79 tests), `bun run typecheck`, `bun run lint`, `bun run build`, and `git diff --check`. Typecheck was run after the build settled to avoid the known generated `.next/types` race.
+- Codex in-app browser proof used the local production build at `http://127.0.0.1:3001/sandbox/first-session-booking`: at `1280x720`, required-name validation, date/time/package progression, consent validation, and free-session confirmation reached `/sandbox/first-session-booking?booking=confirmed`; at `390x844`, the first screen fit without horizontal overflow and retained the exact notice at bottom-left.
+- Rendered confirmation evidence showed no obstructive overlay or clipped controls. The local browser logged only the known Clerk production-key origin mismatch caused by using localhost with the production Clerk proxy; production `/__clerk/v1/environment` and the unsigned session probe still returned the expected 200 and 401 `signed_out` responses.
+- Beta deployment was not attempted because no application code changed and the only visible Vercel project, `ssfitness-www-app-redirect`, is an `api/redirect` shim rather than an SSFitness app beta target. The branch remains pushed at the existing maintenance commit, and this run is not eligible for `App Updated.`
+- Cleanup passed: the local production server was stopped, the in-app browser session was closed, and no run-owned preview/browser process remained.
