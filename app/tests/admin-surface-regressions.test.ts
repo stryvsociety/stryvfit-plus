@@ -110,6 +110,7 @@ describe('admin surface regressions', () => {
   test('keeps intake-requested booking and sign-in fixes visible', () => {
     const schedulerSource = readFileSync(join(appRoot, 'src/components/scheduling/GoogleScheduler.tsx'), 'utf8');
     const billingSource = readFileSync(join(appRoot, 'src/lib/billing.ts'), 'utf8');
+    const stripeClientSource = readFileSync(join(appRoot, 'src/lib/stripeClient.ts'), 'utf8');
     const signInSource = readFileSync(join(appRoot, 'src/app/sign-in/[[...sign-in]]/page.tsx'), 'utf8');
 
     expect(schedulerSource).toContain('All sessions must be cancelled or rescheduled at least 24 hours in advance.');
@@ -118,6 +119,8 @@ describe('admin surface regressions', () => {
     expect(billingSource).not.toContain('paypal');
     expect(billingSource).toContain('recoverDraftMembershipInvoice');
     expect(billingSource).toContain("amount_due <= 0");
+    expect(stripeClientSource).toContain('Stripe.createFetchHttpClient()');
+    expect(stripeClientSource).toContain('timeout: 20_000');
     expect(signInSource).toContain("card: 'mx-auto w-full'");
     expect(signInSource).toContain("rootBox: 'mx-auto w-full'");
   });

@@ -10,6 +10,11 @@ export function stripe() {
 
   stripeClient ??= new Stripe(secretKey, {
     apiVersion: '2026-05-27.dahlia',
+    // OpenNext runs on Cloudflare Workers, where the native Fetch transport is
+    // reliable and the Node HTTP transport can leave Stripe requests hanging.
+    httpClient: Stripe.createFetchHttpClient(),
+    maxNetworkRetries: 1,
+    timeout: 20_000,
     typescript: true,
   });
   return stripeClient;
