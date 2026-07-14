@@ -172,12 +172,15 @@ async function ensureStripeCustomer(appUser: AppUser): Promise<string> {
   return customer.id;
 }
 
-function isOpenMembershipInvoice(invoice: Stripe.Invoice): boolean {
-  return (
-    invoice.metadata?.[MEMBERSHIP_INVOICE_METADATA_KEY] === 'true' &&
-    ['draft', 'open'].includes(invoice.status ?? '') &&
-    (invoice.amount_remaining ?? invoice.amount_due ?? 0) > 0
-  );
+function isPendingMembershipInvoice(invoice: Stripe.Invoice): boolean {
+  if (invoice.metadata?.[MEMBERSHIP_INVOICE_METADATA_KEY] !== 'true') return false;
+
+  // A failed invoice-item call leaves a tagged draft at $0. Keep that draft
+  // in the pending set so a retry can recover it instead of creating a second
+  // invoice for the same client.
+  if (invoice.status === 'draft') return true;
+
+  return invoice.status === 'open' && (invoice.amount_remaining ?? invoice.amount_due ?? 0) > 0;
 }
 
 async function findOpenMembershipInvoice(
@@ -189,7 +192,7 @@ async function findOpenMembershipInvoice(
     stripeClient.invoices.list({ customer: customerId, status: 'draft', limit: 100 }),
     stripeClient.invoices.list({ customer: customerId, status: 'open', limit: 100 }),
   ]);
-  const pendingInvoices = [...open.data, ...drafts.data].filter(isOpenMembershipInvoice);
+  const pendingInvoices = [...open.data, ...drafts.data].filter(isPendingMembershipInvoice);
   const matchingInvoice = pendingInvoices.find((invoice) => invoice.metadata?.service_type === serviceType);
   if (matchingInvoice) return matchingInvoice;
 
