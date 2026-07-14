@@ -16,15 +16,6 @@ describe('admin surface regressions', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('keeps the required daily bug-zap notice visible with exact copy', () => {
-    const source = readFileSync(join(appRoot, 'src/components/pwa/PWAClient.tsx'), 'utf8');
-
-    expect(source).toContain('data-testid="bug-zap-notice"');
-    expect(source).toContain('yesterday&apos;s bugs have been zapped');
-    expect(source).toContain('bottom-[calc(1rem+env(safe-area-inset-bottom))]');
-    expect(source).toContain('rounded-[18px]');
-  });
-
   test('retries transient Clerk asset probe failures before filing incidents', () => {
     const source = readFileSync(join(appRoot, 'src/components/pwa/PWAClient.tsx'), 'utf8');
 
@@ -213,6 +204,9 @@ describe('admin surface regressions', () => {
     expect(flowSource).toContain('Agree & Open Stripe');
     expect(flowSource).toContain('window.location.href = payload.checkoutUrl');
     expect(checkoutSource).toContain('sendBookingCompletionNotice');
+    expect(checkoutSource).toContain('createFreeFirstSessionInvoice');
+    expect(checkoutSource).toContain('findActiveBookingForExactSlot');
+    expect(checkoutSource).toContain('recoverCheckoutUrl');
     expect(checkoutSource).toContain("communicationPreference === 'text'");
     expect(authSource).toContain('abandoned pending Stripe holds');
     expect(noticeSource).toContain('https://api.resend.com/emails');

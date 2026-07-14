@@ -55,6 +55,8 @@ export type BookingRow = {
   client_name: string | null;
   client_phone: string | null;
   stripe_checkout_session_id: string | null;
+  stripe_invoice_id: string | null;
+  stripe_customer_id: string | null;
   google_event_id: string | null;
   metadata: Record<string, unknown>;
 };
@@ -119,6 +121,7 @@ type CreateBookingInput = {
   startsAt: string;
   endsAt: string;
   durationMinutes: number;
+  initialStatus?: 'held' | 'pending_payment' | 'confirmed';
 };
 
 export type CreateAdminBookingInput = {
@@ -157,7 +160,7 @@ export type UpdateClientProfileInput = {
 };
 
 const BOOKING_SELECT =
-  'id, app_user_id, clerk_user_id, service_type, status, starts_at, ends_at, duration_minutes, client_email, client_name, client_phone, stripe_checkout_session_id, google_event_id, metadata';
+  'id, app_user_id, clerk_user_id, service_type, status, starts_at, ends_at, duration_minutes, client_email, client_name, client_phone, stripe_checkout_session_id, stripe_invoice_id, stripe_customer_id, google_event_id, metadata';
 const APP_USER_SELECT =
   'id, clerk_user_id, email, full_name, phone, role, stripe_customer_id, stripe_subscription_id, subscription_status, profile_goal, emergency_contact_name, emergency_contact_phone';
 
@@ -216,13 +219,13 @@ export async function expireStaleHolds() {
   const { error } = await sb
     .from('bookings')
     .update({ status: 'expired', updated_at: now })
-    .eq('status', 'pending_payment')
+    .in('status', ['held', 'pending_payment'])
     .lt('hold_expires_at', now);
   if (error) throw error;
 }
 
-function holdIsActive(row: { status: string; hold_expires_at: string | null }): boolean {
-  if (row.status !== 'pending_payment') return true;
+export function bookingHoldIsActive(row: { status: string; hold_expires_at: string | null }): boolean {
+  if (row.status !== 'held' && row.status !== 'pending_payment') return true;
   if (!row.hold_expires_at) return true;
   return new Date(row.hold_expires_at) > new Date();
 }
@@ -280,7 +283,7 @@ export async function assertSlotAvailable(
   if (error) throw error;
 
   const activeBookings = (data ?? []).filter((booking) =>
-    holdIsActive({
+    bookingHoldIsActive({
       status: String(booking.status),
       hold_expires_at: (booking.hold_expires_at as string | null) ?? null,
     })
@@ -306,7 +309,7 @@ export async function createBookingHold(input: CreateBookingInput): Promise<Book
   const sb = serviceClient();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   const service = BOOKING_SERVICES[input.serviceType];
-  const status: BookingStatus = service.paymentMode === 'free' ? 'confirmed' : 'pending_payment';
+  const status: BookingStatus = input.initialStatus ?? (service.paymentMode === 'free' ? 'confirmed' : 'pending_payment');
 
   const { data, error } = await sb
     .from('bookings')
@@ -322,7 +325,7 @@ export async function createBookingHold(input: CreateBookingInput): Promise<Book
       client_email: input.clientEmail,
       client_name: input.clientName,
       client_phone: normalizeClientPhoneInput(input.clientPhone),
-      hold_expires_at: status === 'pending_payment' ? expiresAt : null,
+      hold_expires_at: status === 'held' || status === 'pending_payment' ? expiresAt : null,
       metadata: buildBookingMetadata({
         serviceType: input.serviceType,
         communicationPreference: input.communicationPreference,
@@ -337,6 +340,60 @@ export async function createBookingHold(input: CreateBookingInput): Promise<Book
 
   if (error) throw error;
   return data as BookingRow;
+}
+
+export async function findActiveBookingForExactSlot(input: {
+  appUserId: string;
+  serviceType: BookingServiceType;
+  startsAt: string;
+  endsAt: string;
+}): Promise<BookingRow | null> {
+  const { data, error } = await serviceClient()
+    .from('bookings')
+    .select(BOOKING_SELECT)
+    .eq('app_user_id', input.appUserId)
+    .eq('service_type', input.serviceType)
+    .eq('starts_at', input.startsAt)
+    .eq('ends_at', input.endsAt)
+    .in('status', ['held', 'pending_payment', 'confirmed'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? (data as BookingRow) : null;
+}
+
+export async function confirmFreeSessionBooking(input: {
+  bookingId: string;
+  customerId: string;
+  invoiceId: string;
+}): Promise<BookingRow> {
+  const updated = await serviceClient()
+    .from('bookings')
+    .update({
+      status: 'confirmed',
+      stripe_customer_id: input.customerId,
+      stripe_invoice_id: input.invoiceId,
+      hold_expires_at: null,
+      confirmed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.bookingId)
+    .select('*')
+    .single();
+
+  if (updated.error) throw updated.error;
+  return updated.data as BookingRow;
+}
+
+export async function expireBookingHold(bookingId: string): Promise<void> {
+  const { error } = await serviceClient()
+    .from('bookings')
+    .update({ status: 'expired', hold_expires_at: null, updated_at: new Date().toISOString() })
+    .eq('id', bookingId)
+    .in('status', ['held', 'pending_payment']);
+  if (error) throw error;
 }
 
 function toAdminBookingSummary(row: BookingRow): AdminBookingSummary {

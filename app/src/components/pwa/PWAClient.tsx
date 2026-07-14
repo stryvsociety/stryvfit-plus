@@ -406,36 +406,26 @@ export function PWAClient() {
     }
   }
 
+  if (!banner || hidePromptsOnAdminSignIn || !Icon) return null;
+
   return (
-    <>
-      <aside
-        data-testid="bug-zap-notice"
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-3 z-40 rounded-[18px] border border-white/15 bg-black/70 px-3.5 py-2 font-body text-[11px] leading-none text-white shadow-[0_12px_30px_rgba(0,0,0,0.28)] backdrop-blur-xl"
-      >
-        yesterday&apos;s bugs have been zapped
-      </aside>
-      {banner && !hidePromptsOnAdminSignIn && Icon ? (
-        <aside className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md">
-          <div className={`flex items-start gap-3 rounded-md border px-4 py-3 shadow-glass ${banner.tone}`}>
-            <Icon className="mt-0.5 h-5 w-5 flex-none text-gold" strokeWidth={1.7} />
-            <div className="min-w-0 flex-1">
-              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-text">
-                {banner.title}
-              </p>
-              <p className="mt-1 font-body text-xs leading-relaxed text-text-muted">{banner.body}</p>
-              {banner.action ? (
-                <button
-                  type="button"
-                  onClick={handleAction}
-                  className="ios-pill mt-3 inline-flex min-h-9 items-center justify-center rounded-full bg-gold px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-bg transition-colors hover:bg-gold-deep"
-                >
-                  Refresh app
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </aside>
-      ) : null}
-    </>
+    <aside className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md">
+      <div className={`flex items-start gap-3 rounded-md border px-4 py-3 shadow-glass ${banner.tone}`}>
+        <Icon className="mt-0.5 h-5 w-5 flex-none text-gold" strokeWidth={1.7} />
+        <div className="min-w-0 flex-1">
+          <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-text">{banner.title}</p>
+          <p className="mt-1 font-body text-xs leading-relaxed text-text-muted">{banner.body}</p>
+          {banner.action ? (
+            <button
+              type="button"
+              onClick={handleAction}
+              className="ios-pill mt-3 inline-flex min-h-9 items-center justify-center rounded-full bg-gold px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-bg transition-colors hover:bg-gold-deep"
+            >
+              Refresh app
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </aside>
   );
 }

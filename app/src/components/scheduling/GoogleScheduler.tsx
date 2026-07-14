@@ -478,7 +478,25 @@ export function GoogleScheduler({
       });
       setSessionBooked(true);
     } catch (error) {
-      setBookingError(error instanceof Error ? error.message : 'Booking failed');
+      const message = error instanceof Error ? error.message : 'Booking failed';
+      void reportIncident({
+        source: 'client',
+        severity: 'high',
+        message,
+        context: {
+          endpoint: '/api/bookings/checkout',
+          serviceType,
+          selectedDate: formatCalendarDateKey(selectedDate),
+          selectedTime,
+          durationMinutes: selectedDuration,
+        },
+        admin_action: 'Inspect the booking checkout request and Stripe handoff before asking the client to retry.',
+      });
+      setBookingError(
+        message === 'Load failed' || message === 'Failed to fetch'
+          ? 'The booking service could not be reached. Your session was not confirmed; try once more.'
+          : message
+      );
     } finally {
       setBookingPending(false);
     }

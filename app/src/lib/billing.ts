@@ -11,10 +11,13 @@ import { appUrl, stripe } from '@/lib/stripeClient';
 export class BillingPortalUnavailableError extends Error {}
 export class BillingRetryUnavailableError extends Error {}
 export class MembershipInvoiceUnavailableError extends Error {}
+export class FreeFirstSessionInvoiceUnavailableError extends Error {}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MEMBERSHIP_INVOICE_DUE_DAYS = 7;
 const MEMBERSHIP_INVOICE_METADATA_KEY = 'stryvfit_membership_invoice';
+const FREE_FIRST_SESSION_INVOICE_METADATA_KEY = 'stryvfit_free_first_session_invoice';
+const FREE_FIRST_SESSION_INVOICE_DESCRIPTION = 'Free first session';
 
 export type BillingStatus =
   | 'none'
@@ -151,17 +154,24 @@ export async function storedCustomerIdForUser(appUser: AppUser): Promise<string 
   return (byEmail.data?.stripe_customer_id as string | undefined) ?? null;
 }
 
-async function ensureStripeCustomer(appUser: AppUser): Promise<string> {
+export async function ensureStripeCustomer(
+  appUser: AppUser,
+  overrides?: { name?: string | null; phone?: string | null }
+): Promise<string> {
   const existing = await storedCustomerIdForUser(appUser);
-  if (existing) return existing;
+  const customerDetails = {
+    email: appUser.email,
+    name: overrides?.name ?? appUser.full_name ?? undefined,
+    phone: overrides?.phone ?? appUser.phone ?? undefined,
+    metadata: { app_user_id: appUser.id, clerk_user_id: appUser.clerk_user_id },
+  };
+  if (existing) {
+    await stripe().customers.update(existing, customerDetails);
+    return existing;
+  }
 
   const customer = await stripe().customers.create(
-    {
-      email: appUser.email,
-      name: appUser.full_name ?? undefined,
-      phone: appUser.phone ?? undefined,
-      metadata: { app_user_id: appUser.id, clerk_user_id: appUser.clerk_user_id },
-    },
+    customerDetails,
     { idempotencyKey: `stryvfit-customer:${appUser.id}` }
   );
   const { error } = await serviceClient()
@@ -170,6 +180,109 @@ async function ensureStripeCustomer(appUser: AppUser): Promise<string> {
     .eq('id', appUser.id);
   if (error) throw error;
   return customer.id;
+}
+
+function freeFirstSessionInvoiceMetadata(appUser: AppUser, bookingId: string): Stripe.MetadataParam {
+  return {
+    [FREE_FIRST_SESSION_INVOICE_METADATA_KEY]: 'true',
+    app_user_id: appUser.id,
+    booking_id: bookingId,
+    service_type: 'free',
+  };
+}
+
+function isFreeFirstSessionInvoice(invoice: Stripe.Invoice, bookingId: string): boolean {
+  return (
+    invoice.metadata?.[FREE_FIRST_SESSION_INVOICE_METADATA_KEY] === 'true' &&
+    invoice.metadata?.booking_id === bookingId &&
+    ['draft', 'open', 'paid'].includes(invoice.status ?? '')
+  );
+}
+
+async function findFreeFirstSessionInvoice(customerId: string, bookingId: string): Promise<Stripe.Invoice | null> {
+  const stripeClient = stripe();
+  const [drafts, open, paid] = await Promise.all([
+    stripeClient.invoices.list({ customer: customerId, status: 'draft', limit: 100 }),
+    stripeClient.invoices.list({ customer: customerId, status: 'open', limit: 100 }),
+    stripeClient.invoices.list({ customer: customerId, status: 'paid', limit: 100 }),
+  ]);
+  return [...drafts.data, ...open.data, ...paid.data].find((invoice) => isFreeFirstSessionInvoice(invoice, bookingId)) ?? null;
+}
+
+async function ensureFreeFirstSessionLine(
+  invoice: Stripe.Invoice,
+  customerId: string,
+  metadata: Stripe.MetadataParam
+): Promise<Stripe.Invoice> {
+  const current = await stripe().invoices.retrieve(invoice.id);
+  if (current.status !== 'draft' || (current.lines?.data.length ?? 0) > 0) return current;
+
+  await stripe().invoiceItems.create(
+    {
+      customer: customerId,
+      invoice: current.id,
+      amount: 0,
+      currency: 'usd',
+      description: FREE_FIRST_SESSION_INVOICE_DESCRIPTION,
+      metadata,
+    },
+    { idempotencyKey: `stryvfit-free-session:${current.id}:item` }
+  );
+  return stripe().invoices.retrieve(current.id);
+}
+
+async function finalizeFreeFirstSessionInvoice(invoice: Stripe.Invoice, idempotencyKey: string): Promise<Stripe.Invoice> {
+  const current = await stripe().invoices.retrieve(invoice.id);
+  const finalized =
+    current.status === 'draft'
+      ? await stripe().invoices.finalizeInvoice(current.id, { auto_advance: false }, { idempotencyKey })
+      : current;
+
+  if (finalized.status !== 'paid' || finalized.amount_due !== 0) {
+    throw new FreeFirstSessionInvoiceUnavailableError('Stripe could not finalize the free-session record.');
+  }
+  return finalized;
+}
+
+export async function createFreeFirstSessionInvoice(
+  appUser: AppUser,
+  bookingId: string,
+  customerDetails?: { name?: string | null; phone?: string | null }
+): Promise<{ invoice: Stripe.Invoice; customerId: string; reused: boolean }> {
+  if (appUser.role !== 'client') {
+    throw new FreeFirstSessionInvoiceUnavailableError('Free-session invoices are available from a client account only.');
+  }
+
+  const customerId = await ensureStripeCustomer(appUser, customerDetails);
+  const metadata = freeFirstSessionInvoiceMetadata(appUser, bookingId);
+  const existing = await findFreeFirstSessionInvoice(customerId, bookingId);
+  if (existing) {
+    const lineReady = await ensureFreeFirstSessionLine(existing, customerId, metadata);
+    return {
+      invoice: await finalizeFreeFirstSessionInvoice(lineReady, `stryvfit-free-session:${bookingId}:reuse-finalize`),
+      customerId,
+      reused: true,
+    };
+  }
+
+  const draft = await stripe().invoices.create(
+    {
+      customer: customerId,
+      collection_method: 'send_invoice',
+      days_until_due: 1,
+      auto_advance: false,
+      description: FREE_FIRST_SESSION_INVOICE_DESCRIPTION,
+      metadata,
+      pending_invoice_items_behavior: 'exclude',
+    },
+    { idempotencyKey: `stryvfit-free-session:${bookingId}:invoice` }
+  );
+  const lineReady = await ensureFreeFirstSessionLine(draft, customerId, metadata);
+  return {
+    invoice: await finalizeFreeFirstSessionInvoice(lineReady, `stryvfit-free-session:${bookingId}:finalize`),
+    customerId,
+    reused: false,
+  };
 }
 
 function isPendingMembershipInvoice(invoice: Stripe.Invoice): boolean {

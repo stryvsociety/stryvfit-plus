@@ -4,6 +4,7 @@ import { buildAvailableTimes, buildAvailableTimesForDate, parseBookingAvailabili
 import {
   adminBookingClientName,
   adminClientSummariesFromBookings,
+  bookingHoldIsActive,
   buildBookingMetadata,
   mergeAdminClientSummaries,
   type AdminBookingSummary,
@@ -98,6 +99,12 @@ describe('booking utilities', () => {
     expect(normalizeAdminClientInput({ email: 'nia@example.com', phone: '+1 305 555 0198' }).phone).toBe(
       '+13055550198'
     );
+  });
+
+  test('expires Stripe and free-session holds instead of keeping a slot blocked forever', () => {
+    expect(bookingHoldIsActive({ status: 'held', hold_expires_at: '2000-01-01T00:00:00.000Z' })).toBe(false);
+    expect(bookingHoldIsActive({ status: 'pending_payment', hold_expires_at: '2099-07-14T14:00:00.000Z' })).toBe(true);
+    expect(bookingHoldIsActive({ status: 'confirmed', hold_expires_at: null })).toBe(true);
   });
 
   test('normalizes client account profile fields without touching Clerk credentials', () => {
