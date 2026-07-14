@@ -27,7 +27,6 @@ Official references:
 
 2. Confirm the client-facing routes.
    - `/book` is the installable PWA entry.
-   - `/meals` is a direct meal-prep surface.
    - `/coach` is the coach contact surface.
    - `/notes` is the trainer-note surface; backend APIs are `/api/admin/client-notes` and `/api/client/notes`.
 
@@ -37,24 +36,17 @@ Official references:
    - Save trainer phone in E.164 format, for example `+13053479816`.
    - Verify `/coach` opens the message CTA.
 
-4. Configure Ideal Nutrition handoff.
-   - Set the trainer affiliate code in the meal link configuration when available.
-   - Use `/admin/pulse?tab=meals` to recommend the meals clients should see.
-   - Backend meal-plan persistence is `/api/admin/meal-plans` and client reads are `/api/client/meal-plans`.
-   - Client-side meal cards should show only trainer-recommended meals and the affiliate-ready external link.
-   - Client notes and meal-change requests persist through `/api/client/requests` and can be reviewed through `/api/admin/client-requests` once the visible UI is wired.
-
-5. Configure scheduling behavior.
+4. Configure scheduling behavior.
    - In StryvAdmin, set booking start times, buffer time, blocked times, and duration options.
    - Confirm `/book` can run the mock booking flow without relying on a live Google Calendar redirect.
    - Confirm the success overlay appears after booking: `You're all done for today. See you next session!`
 
-6. Install-test the PWA.
+5. Install-test the PWA.
    - iPhone Safari: open the production `/book` URL, Share, Add to Home Screen.
    - Android Chrome: open the production `/book` URL, Install app.
    - Desktop Chrome: open the production `/book` URL and use the install icon when available.
 
-7. Client handoff script.
+6. Client handoff script.
    - Give the client only the PWA URL and a short install instruction.
    - Give the trainer/admin the admin URL separately.
    - Keep Linear, Supabase, Cloudflare, and rollback Fly credentials internal to Solvys.
@@ -185,7 +177,6 @@ This creates `stryvfit-plus` and uploads a non-production Worker version. Do not
 bunx wrangler secret put NEXT_PUBLIC_SUPABASE_URL
 bunx wrangler secret put NEXT_PUBLIC_SUPABASE_ANON_KEY
 bunx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-bunx wrangler secret put BROWSERBASE_API_KEY
 bunx wrangler secret put INCIDENT_WEBHOOK_SECRET
 bunx wrangler secret put LINEAR_API_KEY
 bunx wrangler secret put LINEAR_DEFAULT_ASSIGNEE_ID
@@ -221,7 +212,6 @@ Required before production traffic:
 
 Optional until those surfaces go live:
 
-- `BROWSERBASE_API_KEY`
 - `CAL_WEBHOOK_SECRET`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`

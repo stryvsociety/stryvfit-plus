@@ -106,7 +106,6 @@ Open `app/.cloudflare-redeploy.env` and add each line as a **Secret** (encrypted
 |--------|--------|
 | `INCIDENT_WEBHOOK_SECRET`, `SSFITNESS_LINEAR_*` | Support pipeline |
 | `CAL_WEBHOOK_SECRET`, `NEXT_PUBLIC_CAL_*` | Legacy Cal.com |
-| `BROWSERBASE_API_KEY` | Meal scrape |
 | `WGER_API_TOKEN` | Workouts proxy |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | Only if Clerk webhooks used |
 

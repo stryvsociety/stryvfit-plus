@@ -1,32 +1,22 @@
 import type { AppUser } from '@/lib/auth';
 import { serviceClient } from '@/lib/supabase';
 
-export const CLIENT_REQUEST_KINDS = ['trainer-note', 'meal-plan-change'] as const;
+export const CLIENT_REQUEST_KINDS = ['trainer-note'] as const;
 export type StoredClientRequestKind = (typeof CLIENT_REQUEST_KINDS)[number];
 
 export const CLIENT_REQUEST_STATUSES = ['new', 'reviewed', 'archived'] as const;
 export type StoredClientRequestStatus = (typeof CLIENT_REQUEST_STATUSES)[number];
 
-export type ClientRequestMeal = {
-  id: string;
-  name: string;
-  protein_g: number | null;
-  calories: number | null;
-  product_url: string | null;
-};
-
 export type CreateStoredClientRequestInput = {
   kind?: unknown;
   clientName?: unknown;
   message?: unknown;
-  meals?: unknown;
 };
 
 export type NormalizedStoredClientRequestInput = {
   kind: StoredClientRequestKind;
   clientName: string | null;
   message: string;
-  meals: ClientRequestMeal[];
   suggestedActions: string[];
 };
 
@@ -38,7 +28,6 @@ export type StoredClientRequest = {
   kind: StoredClientRequestKind;
   message: string;
   suggestedActions: string[];
-  meals: ClientRequestMeal[];
   status: StoredClientRequestStatus;
   reviewedByUserId: string | null;
   reviewedByEmail: string | null;
@@ -52,10 +41,9 @@ type ClientRequestRow = {
   app_user_id: string | null;
   client_email: string | null;
   client_name: string | null;
-  kind: StoredClientRequestKind;
+  kind: string;
   message: string;
   suggested_actions: string[];
-  meals: ClientRequestMeal[];
   status: StoredClientRequestStatus;
   reviewed_by_user_id: string | null;
   reviewed_by_email: string | null;
@@ -72,7 +60,7 @@ export class ClientRequestValidationError extends Error {
 }
 
 const CLIENT_REQUEST_SELECT =
-  'id, app_user_id, client_email, client_name, kind, message, suggested_actions, meals, status, reviewed_by_user_id, reviewed_by_email, reviewed_at, created_at, updated_at';
+  'id, app_user_id, client_email, client_name, kind, message, suggested_actions, status, reviewed_by_user_id, reviewed_by_email, reviewed_at, created_at, updated_at';
 
 function trimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -83,7 +71,7 @@ function normalizeLimit(limit = 30): number {
 }
 
 function normalizeKind(value: unknown): StoredClientRequestKind {
-  if (value === 'trainer-note' || value === 'meal-plan-change') return value;
+  if (value === 'trainer-note') return value;
   throw new ClientRequestValidationError('Choose a valid client request type.');
 }
 
@@ -92,67 +80,8 @@ function normalizeStatus(value: unknown): StoredClientRequestStatus {
   throw new ClientRequestValidationError('Client request status must be new, reviewed, or archived.');
 }
 
-function nullableNumber(value: unknown): number | null {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function normalizeMeals(value: unknown): ClientRequestMeal[] {
-  if (value === undefined || value === null) return [];
-  if (!Array.isArray(value)) throw new ClientRequestValidationError('Client request meals must be a list.');
-
-  return value
-    .map((item): ClientRequestMeal | null => {
-      if (!item || typeof item !== 'object') return null;
-      const record = item as Record<string, unknown>;
-      const id = trimmedString(record.id);
-      const name = trimmedString(record.name);
-      if (!id || !name) return null;
-
-      return {
-        id,
-        name,
-        protein_g: nullableNumber(record.protein_g),
-        calories: nullableNumber(record.calories),
-        product_url: trimmedString(record.product_url) || null,
-      };
-    })
-    .filter((meal): meal is ClientRequestMeal => Boolean(meal))
-    .slice(0, 20);
-}
-
-export function suggestedClientRequestActions(
-  kind: StoredClientRequestKind,
-  message: string,
-  meals: ClientRequestMeal[]
-): string[] {
-  const lower = message.toLowerCase();
-  const actions = new Set<string>();
-
-  if (kind === 'meal-plan-change') {
-    actions.add('Review requested meal swaps against the trainer-approved plan.');
-    actions.add('Send one updated 4-meal recommendation set back to the client.');
-  } else {
-    actions.add('Review note before the next check-in.');
-  }
-
-  if (lower.includes('allerg') || lower.includes('dairy') || lower.includes('gluten')) {
-    actions.add('Check dietary restriction tags before approving substitutions.');
-  }
-  if (lower.includes('hungry') || lower.includes('more food') || lower.includes('portion')) {
-    actions.add('Rebalance calories or add a trainer-approved flex meal.');
-  }
-  if (lower.includes('protein')) {
-    actions.add('Bias replacements toward higher-protein Ideal Nutrition meals.');
-  }
-  if (lower.includes('schedule') || lower.includes('time')) {
-    actions.add('Confirm meal timing around the next scheduled workout.');
-  }
-  if (meals.length > 0) {
-    actions.add(`Use current ${meals.length}-meal plan as the baseline for the response.`);
-  }
-
-  return [...actions].slice(0, 5);
+export function suggestedClientRequestActions(): string[] {
+  return ['Review note before the next check-in.'];
 }
 
 export function normalizeStoredClientRequestInput(
@@ -161,7 +90,6 @@ export function normalizeStoredClientRequestInput(
 ): NormalizedStoredClientRequestInput {
   const kind = normalizeKind(input.kind);
   const message = trimmedString(input.message);
-  const meals = normalizeMeals(input.meals);
   const clientName = trimmedString(input.clientName) || appUser?.full_name?.trim() || appUser?.email || null;
 
   if (!message) throw new ClientRequestValidationError('Add a message before sending this request.');
@@ -170,21 +98,21 @@ export function normalizeStoredClientRequestInput(
     kind,
     clientName,
     message,
-    meals,
-    suggestedActions: suggestedClientRequestActions(kind, message, meals),
+    suggestedActions: suggestedClientRequestActions(),
   };
 }
 
-function toStoredClientRequest(row: ClientRequestRow): StoredClientRequest {
+function toStoredClientRequest(row: ClientRequestRow): StoredClientRequest | null {
+  if (row.kind !== 'trainer-note') return null;
+
   return {
     id: row.id,
     appUserId: row.app_user_id,
     clientEmail: row.client_email,
     clientName: row.client_name,
-    kind: row.kind,
+    kind: 'trainer-note',
     message: row.message,
     suggestedActions: row.suggested_actions,
-    meals: row.meals,
     status: row.status,
     reviewedByUserId: row.reviewed_by_user_id,
     reviewedByEmail: row.reviewed_by_email,
@@ -216,14 +144,15 @@ export async function createStoredClientRequest(
       kind: normalized.kind,
       message: normalized.message,
       suggested_actions: normalized.suggestedActions,
-      meals: normalized.meals,
       status: 'new',
     })
     .select(CLIENT_REQUEST_SELECT)
     .single();
 
   if (error) throw error;
-  return toStoredClientRequest(data as ClientRequestRow);
+  const request = toStoredClientRequest(data as ClientRequestRow);
+  if (!request) throw new ClientRequestValidationError('This request type is no longer available.');
+  return request;
 }
 
 export async function listClientRequests(
@@ -255,7 +184,7 @@ export async function listClientRequests(
   const rows = [...((byUserId.data ?? []) as ClientRequestRow[]), ...((byEmail.data ?? []) as ClientRequestRow[])];
   for (const row of rows) {
     const request = toStoredClientRequest(row);
-    if (clientRequestVisibleToClient(request, appUser)) byId.set(request.id, request);
+    if (request && clientRequestVisibleToClient(request, appUser)) byId.set(request.id, request);
   }
 
   return [...byId.values()]
@@ -281,7 +210,9 @@ export async function listAdminClientRequests({
 
   const { data, error } = await query;
   if (error) throw error;
-  return ((data ?? []) as ClientRequestRow[]).map(toStoredClientRequest);
+  return ((data ?? []) as ClientRequestRow[])
+    .map(toStoredClientRequest)
+    .filter((request): request is StoredClientRequest => Boolean(request));
 }
 
 export async function updateClientRequestStatus(
@@ -303,9 +234,12 @@ export async function updateClientRequestStatus(
       reviewed_at: reviewed ? new Date().toISOString() : null,
     })
     .eq('id', id)
+    .eq('kind', 'trainer-note')
     .select(CLIENT_REQUEST_SELECT)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return toStoredClientRequest(data as ClientRequestRow);
+  const request = data ? toStoredClientRequest(data as ClientRequestRow) : null;
+  if (!request) throw new ClientRequestValidationError('This request type is no longer available.');
+  return request;
 }

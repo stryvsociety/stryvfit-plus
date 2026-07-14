@@ -21,7 +21,6 @@ This README is the app developer summary, not the full operator guide.
 - Supabase (auth, Postgres, RLS, realtime)
 - Stripe Checkout for in-person packages and monthly online coaching subscriptions
 - Google Calendar handoff through a Stryv-themed scheduler
-- Browserbase Fetch API for Ideal Nutrition menu ingestion
 - Self-hosted wger exercise/workout data via `WGER_API_BASE_URL`
 - PWA: web manifest + service worker, install-to-home-screen on iOS/Android
 - Solvys Gold theme on Stryv brand surface
@@ -31,13 +30,13 @@ This README is the app developer summary, not the full operator guide.
 - `/book` — Stryv-themed scheduler that creates Google Calendar events
 - `/notes` — trainer notes (Supabase realtime, RLS per client)
 - `/coach` — iMessage CTA via `sms:` deep link to admin-configured trainer phone
-- `/admin/pulse` — StryvAdmin dashboard for scheduling, nutrition, and support health workflows
+- `/admin/pulse` — StryvAdmin dashboard for scheduling and support health workflows
 - `/admin/workouts` — trainer workout builder backed by the wger exercise library proxy
 
 ## Admin
 
 - `/admin/settings` — trainer phone (E.164), trainer name, success toast on save
-- `/admin/pulse` — appointments + Ideal Nutrition recipe picker + Google Calendar scheduling handoff
+- `/admin/pulse` — appointments + Google Calendar scheduling handoff
 - `/admin/workouts` — workout blocks, remote video notes, training week, and wger exercise library
 
 ## wger

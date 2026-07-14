@@ -21,14 +21,14 @@ SSFitness is a Next.js PWA for Stryv Society Fitness. It has two main experience
 - Client-facing phase flow: `/book`
 - Admin/trainer operating surfaces: `/admin/pulse`, `/admin/workouts`, `/admin/settings`
 
-The client app is intended to feel full-screen and phase-by-phase. When no training session is scheduled, the user sees the calendar only. Meal prep and journaling are accessed from the floating bottom-right hamburger menu. When a remote session is scheduled, the workout appears after a countdown. After workout completion, the user swipes right or down, or taps continue, and the app briefly deliberates before choosing the next phase.
+The client app is intended to feel full-screen and phase-by-phase. When no training session is scheduled, the user sees the calendar only. Journaling is accessed from the floating bottom-right hamburger menu. When a remote session is scheduled, the workout appears after a countdown. After workout completion, the user swipes right or down, or taps continue, and the app briefly deliberates before choosing the next phase.
 
-The admin app is a non-technical trainer studio. It lets the Stryv team manage appointments, meal plans, workout routines, client readiness, support requests, and wger-backed exercise choices.
+The admin app is a non-technical trainer studio. It lets the Stryv team manage appointments, workout routines, client readiness, support requests, and wger-backed exercise choices. Meal-prep source remains archived in the repository but has no live route, navigation, booking service, or API.
 
 ## Current State Snapshot
 
-- `app/src/components/client/ClientPhaseFlow.tsx`: client full-screen phase flow, URL-driven session demos, live Stripe billing panel, recovery toast, theme toggle, floating menu, workout, meal prep, journal, payment modal.
-- `app/src/components/admin/TrainerOpsStudio.tsx`: appointment and meal command center for StryvAdmin.
+- `app/src/components/client/ClientPhaseFlow.tsx`: client full-screen phase flow, URL-driven session demos, live Stripe billing panel, recovery toast, theme toggle, floating menu, workout, journal, and payment modal.
+- `app/src/components/admin/TrainerOpsStudio.tsx`: appointment command center for StryvAdmin.
 - `app/src/components/admin/AdminWorkoutsPage.tsx`: workout builder, client selector, wger exercise library, training week, remote video notes, support chat, schedule timeline.
 - `app/src/components/admin/AdminSupportChat.tsx`: admin support request form that posts incidents into the Solvys support pipeline.
 - `app/src/lib/wger.ts`: server-side wger exercise normalizer and fallback exercise set.
@@ -38,10 +38,10 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 
 - `/`: public landing page.
 - `/book`: client app phase flow. Query helpers currently include `?session=remote`, `?session=in-person`, `?billing=update`, and `?billing=retry`.
-- `/meals`: standalone Ideal Nutrition meal prep picker.
+- `/meals`: legacy path that redirects to the active booking surface.
 - `/notes`: client trainer notes page backed by published trainer-note records.
 - `/coach`: iMessage CTA to the configured trainer phone.
-- `/admin/pulse`: StryvAdmin appointment and meal command center.
+- `/admin/pulse`: StryvAdmin appointment command center.
 - `/admin/workouts`: trainer workout builder with wger exercise library.
 - `/admin/settings`: trainer phone/name settings.
 - `/api/wger/exercises`: server proxy for exercise lookup from `WGER_API_BASE_URL`.
@@ -49,12 +49,12 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - `/api/client/workout-routines`: authenticated client read path for published workout routines.
 - `/api/admin/appointment-plans`: admin save/publish path for appointment preparation and follow-up plans.
 - `/api/client/appointment-plans`: authenticated client read path for published appointment plans.
-- `/api/admin/meal-plans`: admin save/publish path for Ideal Nutrition meal plans.
-- `/api/client/meal-plans`: authenticated client read path for published meal plans.
+- `/api/admin/meal-plans`: retired and returns `404`.
+- `/api/client/meal-plans`: retired and returns `404`.
 - `/api/client/posts`: authenticated client read path for published admin posts.
 - `/api/admin/clients`: authenticated admin roster read, manual client creation, and safe client profile removal path.
-- `/api/client/requests`: authenticated client note/meal-change request persistence.
-- `/api/admin/client-requests`: admin review/status path for client note/meal-change requests.
+- `/api/client/requests`: authenticated client note request persistence.
+- `/api/admin/client-requests`: admin review/status path for client note requests.
 - `/api/admin/client-notes`: admin trainer-note creation and publish path.
 - `/api/client/notes`: authenticated client read path for published trainer notes.
 - `/api/incidents`: incident health, support capture, dedupe, and Linear filing.
@@ -65,7 +65,7 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - Supabase: auth, app settings, support incidents, update records, future client data.
 - Stripe: subscription/payment state, Billing Portal, invoice retry, and billing recovery state for the client phase gate.
 - Google Calendar handoff: local themed scheduler creates Google Calendar event URLs.
-- Ideal Nutrition Browserbase ingestion: meal data source through `BROWSERBASE_API_KEY`, with fallback behavior in code.
+- Ideal Nutrition Browserbase ingestion: archived integration source only; it is not wired into the live app.
 - Linear: Solvys support issue filing from incidents.
 - wger: self-hosted exercise/workout data source via `WGER_API_BASE_URL`.
 - PWA runtime: manifest, service worker, install-to-home-screen flow.
@@ -77,16 +77,16 @@ The admin app is a non-technical trainer studio. It lets the Stryv team manage a
 - Booking consent form is required in the `/book` scheduler before session bookings; the form URL defaults to the provided Google Form and can be overridden with `NEXT_PUBLIC_BOOKING_CONSENT_FORM_URL`.
 - Google Calendar failures no longer block booking confirmation; the app confirms the Supabase booking and files a support incident for calendar follow-up.
 - Trainer availability persisted in Supabase; admin PUT `/api/admin/booking-availability`.
-- Meal prep booking is **free** (Ideal Nutrition affiliate only).
+- Meal prep is not an active booking service.
 - See `docs/ASHLEY-LAUNCH-READY.md` for Ashley’s 5-minute verify list.
 
 ## Known Simulation And Pending Wiring
 
 - Client phase flow (`ClientPhaseFlow`) still uses URL query params for remote workout countdown demos (`?session=remote`). Billing is live Stripe state via `/api/billing/summary`, `/api/billing/retry`, Billing Portal, and webhook-driven recovery notices.
-- Cash App Pay and PayPal are set to `on` in Stripe payment method preferences but still report unavailable in Ashley's live Stripe account until Stripe Dashboard activation/approval is complete. Apple Pay is active.
-- "Post to client" actions write through the admin publish APIs and authenticated client read routes for appointments, meals, workouts, and trainer notes.
+- Cash App Pay and PayPal are set to `off` in Stripe payment-method preferences and remain unavailable in Ashley's live Stripe account. Apple Pay remains active.
+- "Post to client" actions write through the admin publish APIs and authenticated client read routes for appointments, workouts, and trainer notes.
 - `/admin/workouts` has backend routine persistence through `/api/admin/workout-routines`; direct multi-endpoint wger sync remains dependent on a reachable wger host plus `WGER_API_TOKEN`.
-- Client note and meal-plan-change requests have Supabase-backed create/read/admin-review APIs.
+- Client notes have Supabase-backed create/read/admin-review APIs.
 - `/notes` reads published trainer notes for the signed-in client.
 
 ## Validation Gates

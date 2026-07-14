@@ -11,7 +11,7 @@ On every new onboarding or support session:
 3. Read `app/README.md`, `infra/wger/README.md`, and `app/.env.example`.
 4. Inspect relevant files before acting:
    - Client flow: `app/src/components/client/ClientPhaseFlow.tsx`
-   - Admin appointments/meals: `app/src/components/admin/TrainerOpsStudio.tsx`
+   - Admin appointments: `app/src/components/admin/TrainerOpsStudio.tsx`
    - Admin workouts: `app/src/components/admin/AdminWorkoutsPage.tsx`
    - Support chat: `app/src/components/admin/AdminSupportChat.tsx`
    - wger client: `app/src/lib/wger.ts`
@@ -30,18 +30,15 @@ On every new onboarding or support session:
 
 ## Admin UI Control Map
 
-- `/admin/pulse`: appointments, meal operations, client readiness, System Health.
-- `/admin/pulse?tab=meals`: direct meal tab.
+- `/admin/pulse`: appointments, client readiness, System Health.
 - `/admin/workouts`: workout builder, wger library, support request panel, training week, schedule timeline.
 - `/admin/settings`: trainer settings.
 - `/api/admin/workout-routines`: backend save/publish path for workout routines.
 - `/api/client/workout-routines`: authenticated client read path for published workout routines.
 - `/api/admin/appointment-plans`: backend save/publish path for appointment preparation and follow-up plans.
 - `/api/client/appointment-plans`: authenticated client read path for published appointment plans.
-- `/api/admin/meal-plans`: backend save/publish path for Ideal Nutrition meal plans.
-- `/api/client/meal-plans`: authenticated client read path for published meal plans.
 - `/api/admin/clients`: authenticated admin roster read, manual client creation, and safe client profile removal path.
-- `/api/client/requests`: authenticated client note/meal-change request persistence.
+- `/api/client/requests`: authenticated client note request persistence.
 - `/api/admin/client-requests`: admin review/status path for client requests.
 - `/api/admin/client-notes`: admin trainer-note creation and publish path.
 - `/api/client/notes`: authenticated client read path for published trainer notes.
@@ -49,9 +46,9 @@ On every new onboarding or support session:
 Expected UI controls:
 
 - Client selector cards on the left.
-- Top section nav: Appointments, Workouts, Meals.
+- Top section nav: Appointments and Workouts.
 - Theme toggles on admin/client surfaces.
-- "Post to client" button. Admin publish routes write appointment, meal, workout, and trainer-note records that authenticated clients can read from their app surfaces.
+- "Post to client" button. Admin publish routes write appointment, workout, and trainer-note records that authenticated clients can read from their app surfaces.
 - Support request box on admin workout surface.
 - System Health card in admin sidebars.
 
@@ -72,19 +69,13 @@ Chat, inspect SSFitness health. Check env coverage, local app status, /api/incid
 Admin walkthrough:
 
 ```text
-Chat, open StryvAdmin and walk me through appointments, meals, workouts, support, and System Health without changing anything.
+Chat, open StryvAdmin and walk me through appointments, workouts, support, and System Health without changing anything.
 ```
 
 Workout drafting:
 
 ```text
 Chat, draft a workout for [client]. Use the wger exercise library if it is connected. Stop before publishing and summarize what changed.
-```
-
-Meal drafting:
-
-```text
-Chat, draft a meal plan for [client] using Ideal Nutrition options. Stop before publishing and summarize calories/protein/cost.
 ```
 
 Support filing:
@@ -96,7 +87,7 @@ Chat, file a [low/medium/high/critical] support request: [issue]. Then verify wh
 Client flow QA:
 
 ```text
-Chat, test the client flow for no session, remote session, workout completion, meal prep, journaling, and 7-day payment lockout.
+Chat, test the client flow for no session, remote session, workout completion, journaling, and 7-day payment lockout.
 ```
 
 ## Verification Commands

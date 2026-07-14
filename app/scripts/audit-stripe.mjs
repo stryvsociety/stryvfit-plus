@@ -102,6 +102,25 @@ async function main() {
     }
   }
 
+  console.log('\n=== Ineligible payment methods ===');
+  const paymentMethodConfigurations = await stripe.paymentMethodConfigurations.list({ limit: 100, active: true });
+  if (paymentMethodConfigurations.data.length === 0) {
+    console.log('  MISSING (no active payment-method configuration)');
+    missing.push({ label: 'Stripe payment-method configuration' });
+  } else {
+    for (const config of paymentMethodConfigurations.data) {
+      for (const [label, method] of [
+        ['Cash App Pay', config.cashapp],
+        ['PayPal', config.paypal],
+      ]) {
+        const preference = method?.display_preference?.preference;
+        const disabled = preference === 'off';
+        console.log(`  ${disabled ? 'OK     ' : 'ENABLED'} ${label} on ${config.id}  preference=${preference ?? 'unset'}  available=${method?.available ?? false}`);
+        if (!disabled) missing.push({ label: `${label} disabled on ${config.id}` });
+      }
+    }
+  }
+
   console.log('\n=== Stripe webhook endpoint ===');
   const endpoints = await stripe.webhookEndpoints.list({ limit: 100 });
   const endpoint = endpoints.data.find((item) => item.url === webhookUrl);

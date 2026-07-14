@@ -2,9 +2,9 @@ const baseUrl = process.env.SMOKE_BASE_URL ?? 'http://localhost:3001';
 
 async function main() {
   const incident = {
-    source: 'browserbase',
+    source: 'support-smoke',
     route: '/admin/pulse',
-    message: 'Smoke test: Ideal Nutrition ingestion degraded',
+    message: 'Smoke test: support intake pipeline degraded',
     severity: 'high',
     fingerprint: `smoke-support-pipeline-${Date.now()}`,
     context: { smoke: true, runner: 'scripts/smoke-support-pipeline.mjs' },

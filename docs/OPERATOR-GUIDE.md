@@ -14,7 +14,7 @@ Good prompts:
 - "Use the wger library to pick a lower-body exercise."
 - "Draft a remote workout for Jordan, but do not publish yet."
 - "Check whether support is connected to Linear."
-- "File a support request: the meal planner is not loading."
+- "File a support request: the booking screen is not loading."
 - "Show me the client flow as a remote session."
 - "Review the payment-gated flow for 7 days past due."
 
@@ -33,7 +33,7 @@ Open `/book` for the client experience.
 When no session is scheduled:
 
 - The user sees the calendar only.
-- Meal prep and journaling are not shown up front.
+- Journaling is not shown up front.
 - The floating square hamburger button in the bottom right opens the phase menu.
 
 When a session is scheduled:
@@ -44,17 +44,9 @@ When a session is scheduled:
 - Mark the workout done, then swipe right/down or tap continue to move to the next phase.
 - The app briefly shows "Checking your next best step" before displaying the next phase or a payment prompt.
 
-Meal prep:
-
-- The meal prep phase lets users search/filter Ideal Nutrition meals.
-- Selected meals update cost, protein, calories, and the Pulse brief.
-- The standalone page is `/meals`.
-- Published meal plans are stored through the admin APIs and read from authenticated client meal-plan routes.
-- Client meal-change requests are stored through client APIs and reviewable from the admin client details panel.
-
 Journaling:
 
-- The journal phase asks short reflection prompts after workout/meal prep.
+- The journal phase asks short reflection prompts after a workout.
 - This is currently local UI, not a complete saved journal backend.
 - Trainer notes posted by admins render on `/notes` for the signed-in client.
 
@@ -67,7 +59,7 @@ Payment prompts:
 
 ## StryvAdmin
 
-Open `/admin/pulse` for appointments and meal operations.
+Open `/admin/pulse` for appointments and client operations.
 
 Use it to:
 
@@ -75,8 +67,6 @@ Use it to:
 - Schedule Google Calendar blocks.
 - Select a client.
 - Review client readiness.
-- Manage meal plan targets.
-- Use Ideal Nutrition meal selection.
 - File support requests.
 - Check System Health.
 
@@ -93,7 +83,6 @@ Use it to:
 - Use "Post to client" to publish the workout routine to the selected client's app account.
 - Saved workout routine data is available through backend APIs; direct wger mirroring needs the wger host and API token configured.
 - Saved appointment preparation and follow-up data is available through `/api/admin/appointment-plans` and `/api/client/appointment-plans`.
-- Saved meal plan data is available through `/api/admin/meal-plans` and `/api/client/meal-plans`.
 
 Open `/admin/settings` for trainer-facing settings:
 
@@ -115,12 +104,6 @@ Workout:
 Chat, open /admin/workouts, select Jordan, draft a remote hotel workout using wger suggestions, and stop before publishing.
 ```
 
-Meal plan:
-
-```text
-Chat, open /admin/pulse?tab=meals, review Devon's meal plan targets, select five high-protein meals, and summarize the Pulse brief.
-```
-
 Support:
 
 ```text
@@ -130,7 +113,7 @@ Chat, check System Health. If setup is missing, tell me exactly which env or ser
 Support filing:
 
 ```text
-Chat, file a medium support request that says: the meal planner did not load on the admin page.
+Chat, file a medium support request that says: the booking screen did not load on the client app.
 ```
 
 wger:
@@ -154,7 +137,7 @@ Chat, sign in as a client with a past-due Stripe subscription and show me the bi
 ## What Not To Do
 
 - Do not ask ChatGPT to invent real client billing state.
-- Do not publish client-visible workout/meal content without reviewing it.
+- Do not publish client-visible workout content without reviewing it.
 - Do not treat demo query params as production data.
 - Do not ignore System Health setup warnings.
 - Do not paste live secrets into chat unless the environment explicitly requires them and TP approves.

@@ -40,7 +40,7 @@ bun run cf:deploy     # fresh OpenNext deploy
 - **Trainer availability** — stored in Supabase `app_settings.booking_availability`; enforced on checkout; admin edits in scheduler “manage availability” mode.
 - **Consent form** — `/book` requires clients to open and acknowledge the Google consent form before confirming session bookings.
 - **Calendar fallback** — if Google Calendar has a temporary credential/API issue, the booking still confirms in Supabase and files a support incident for manual calendar follow-up.
-- **Meal prep** — affiliate / free path only (no Stripe price).
+- **Meal prep** — retired from the live application; source remains archived for a later integration.
 - **Clerk auth** — sign-in/up on production domains.
 - **Landing** — comparison section removed per client request.
 
@@ -85,7 +85,6 @@ After steps 1–5 pass on Ashley’s zone: remove Worker + routes on the **previ
 
 - `CLERK_WEBHOOK_SIGNING_SECRET` — only if Clerk webhooks are enabled.
 - `CAL_WEBHOOK_SECRET` — legacy Cal.com.
-- `BROWSERBASE_API_KEY` — Ideal Nutrition scrape (fallback exists).
 - `WGER_API_TOKEN` — private wger routine writes (exercise read works without).
 - Client phase flow (`ClientPhaseFlow`) still uses URL demo params for remote workout countdown; **booking/payments are production**.
 

@@ -3,7 +3,6 @@ import {
   ClientRequestValidationError,
   clientRequestVisibleToClient,
   normalizeStoredClientRequestInput,
-  suggestedClientRequestActions,
   type StoredClientRequest,
 } from '../src/lib/clientRequestStore';
 
@@ -14,27 +13,27 @@ const appUser = {
 };
 
 describe('client request store utilities', () => {
-  test('normalizes meal-plan change requests and derives trainer actions', () => {
+  test('normalizes trainer notes without accepting meal-plan input', () => {
     const normalized = normalizeStoredClientRequestInput(
       {
-        kind: 'meal-plan-change',
-        message: ' I need more protein and less dairy this week ',
-        meals: [
-          { id: 'meal-1', name: ' Turkey Bowl ', protein_g: 42, calories: 510, product_url: 'https://example.com/meal' },
-          { id: '', name: 'Ignored' },
-        ],
+        kind: 'trainer-note',
+        message: ' I need help with my next session ',
       },
       appUser
     );
 
     expect(normalized).toMatchObject({
-      kind: 'meal-plan-change',
+      kind: 'trainer-note',
       clientName: 'Nia McCain',
-      message: 'I need more protein and less dairy this week',
-      meals: [{ id: 'meal-1', name: 'Turkey Bowl', protein_g: 42, calories: 510 }],
+      message: 'I need help with my next session',
     });
-    expect(normalized.suggestedActions).toContain('Check dietary restriction tags before approving substitutions.');
-    expect(normalized.suggestedActions).toContain('Bias replacements toward higher-protein Ideal Nutrition meals.');
+    expect(normalized.suggestedActions).toEqual(['Review note before the next check-in.']);
+  });
+
+  test('rejects retired meal-plan change requests', () => {
+    expect(() => normalizeStoredClientRequestInput({ kind: 'meal-plan-change', message: 'Change my meals' }, appUser)).toThrow(
+      ClientRequestValidationError
+    );
   });
 
   test('rejects empty client messages', () => {
@@ -53,16 +52,6 @@ describe('client request store utilities', () => {
     );
   });
 
-  test('keeps suggested action order capped for trainer review', () => {
-    const actions = suggestedClientRequestActions(
-      'meal-plan-change',
-      'I am hungry, need more protein, have a dairy allergy, and my meal time changed.',
-      [{ id: 'meal-1', name: 'Turkey Bowl', protein_g: 42, calories: 510, product_url: null }]
-    );
-
-    expect(actions).toHaveLength(5);
-    expect(actions[0]).toBe('Review requested meal swaps against the trainer-approved plan.');
-  });
 });
 
 function clientRequest(overrides: Partial<StoredClientRequest> = {}): StoredClientRequest {
@@ -74,7 +63,6 @@ function clientRequest(overrides: Partial<StoredClientRequest> = {}): StoredClie
     kind: overrides.kind ?? 'trainer-note',
     message: overrides.message ?? 'Feeling sore today',
     suggestedActions: overrides.suggestedActions ?? ['Review note before the next check-in.'],
-    meals: overrides.meals ?? [],
     status: overrides.status ?? 'new',
     reviewedByUserId: overrides.reviewedByUserId ?? null,
     reviewedByEmail: overrides.reviewedByEmail ?? null,
