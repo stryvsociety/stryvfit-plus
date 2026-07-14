@@ -125,6 +125,8 @@ describe('admin surface regressions', () => {
     expect(billingSource).toContain("payment_method_types: ['card']");
     expect(billingSource).not.toContain('cashapp');
     expect(billingSource).not.toContain('paypal');
+    expect(billingSource).toContain('recoverDraftMembershipInvoice');
+    expect(billingSource).toContain("amount_due <= 0");
     expect(signInSource).toContain("card: 'mx-auto w-full'");
     expect(signInSource).toContain("rootBox: 'mx-auto w-full'");
   });

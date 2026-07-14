@@ -203,14 +203,40 @@ async function findOpenMembershipInvoice(
 }
 
 async function finalizeMembershipInvoice(invoice: Stripe.Invoice, idempotencyKey: string): Promise<Stripe.Invoice> {
+  const current = await stripe().invoices.retrieve(invoice.id);
+  if (current.status === 'draft' && current.amount_due <= 0) {
+    throw new MembershipInvoiceUnavailableError('Stripe could not prepare the membership package line item.');
+  }
   const finalized =
-    invoice.status === 'draft'
-      ? await stripe().invoices.finalizeInvoice(invoice.id, { auto_advance: false }, { idempotencyKey })
-      : invoice;
+    current.status === 'draft'
+      ? await stripe().invoices.finalizeInvoice(current.id, { auto_advance: false }, { idempotencyKey })
+      : current;
   if (finalized.status !== 'open' || !finalized.hosted_invoice_url) {
     throw new MembershipInvoiceUnavailableError('Stripe could not prepare a payable membership invoice.');
   }
   return finalized;
+}
+
+async function recoverDraftMembershipInvoice(
+  invoice: Stripe.Invoice,
+  customerId: string,
+  priceId: string,
+  metadata: Stripe.MetadataParam
+): Promise<Stripe.Invoice> {
+  const current = await stripe().invoices.retrieve(invoice.id);
+  if (current.status !== 'draft' || current.amount_due > 0) return current;
+
+  await stripe().invoiceItems.create(
+    {
+      customer: customerId,
+      invoice: current.id,
+      pricing: { price: priceId },
+      quantity: 1,
+      metadata,
+    },
+    { idempotencyKey: `stryvfit-membership:${current.id}:recover-item` }
+  );
+  return stripe().invoices.retrieve(current.id);
 }
 
 export async function createMembershipInvoice(
@@ -230,27 +256,28 @@ export async function createMembershipInvoice(
     throw new MembershipInvoiceUnavailableError('This membership package is not configured for Stripe yet.');
   }
 
-  const customerId = await ensureStripeCustomer(appUser);
-  const existingInvoice = await findOpenMembershipInvoice(customerId, serviceType);
-  if (existingInvoice) {
-    return {
-      invoice: await finalizeMembershipInvoice(existingInvoice, `stryvfit-membership:${appUser.id}:reuse-finalize`),
-      reused: true,
-    };
-  }
-
   const stripeClient = stripe();
   const price = await stripeClient.prices.retrieve(priceId);
   if (!price.active || price.recurring) {
     throw new MembershipInvoiceUnavailableError('This membership package cannot be invoiced as a one-time charge.');
   }
 
-  const idempotencyBase = `stryvfit-membership:${appUser.id}:${serviceType}:${Math.floor(Date.now() / 60_000)}`;
+  const customerId = await ensureStripeCustomer(appUser);
   const metadata = {
     [MEMBERSHIP_INVOICE_METADATA_KEY]: 'true',
     app_user_id: appUser.id,
     service_type: serviceType,
   };
+  const existingInvoice = await findOpenMembershipInvoice(customerId, serviceType);
+  if (existingInvoice) {
+    const readyInvoice = await recoverDraftMembershipInvoice(existingInvoice, customerId, priceId, metadata);
+    return {
+      invoice: await finalizeMembershipInvoice(readyInvoice, `stryvfit-membership:${appUser.id}:reuse-finalize`),
+      reused: true,
+    };
+  }
+
+  const idempotencyBase = `stryvfit-membership:${appUser.id}:${serviceType}:${Math.floor(Date.now() / 60_000)}`;
   const draft = await stripeClient.invoices.create(
     {
       customer: customerId,
