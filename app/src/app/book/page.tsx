@@ -22,6 +22,7 @@ export default async function BookPage({ searchParams }: BookPageProps) {
   const sessionId = Array.isArray(params?.session_id) ? params?.session_id[0] : params?.session_id;
   const requestedServiceType = serviceParam ? parseBookingService(serviceParam) : null;
   let serviceType: BookingServiceType = requestedServiceType ?? 'free';
+  let requiresMembershipTierSelection = false;
 
   if (bookingParam === 'success' && typeof sessionId === 'string') {
     const returnStatus = await confirmPaidBookingReturn(appUser, sessionId).catch(() => ({ status: 'pending' as const }));
@@ -58,7 +59,10 @@ export default async function BookPage({ searchParams }: BookPageProps) {
       );
     }
 
+    // A returning client must choose a paid tier on the booking screen. Defaulting to
+    // sessions_4 here would silently send them to the wrong Stripe Checkout product.
     serviceType = requestedServiceType ?? (hasFirstSession ? 'sessions_4' : 'free');
+    requiresMembershipTierSelection = hasFirstSession && !requestedServiceType;
   }
 
   const [appointmentPlansResult, workoutRoutinesResult] = await Promise.allSettled([
@@ -70,6 +74,7 @@ export default async function BookPage({ searchParams }: BookPageProps) {
     <ClientPhaseFlow
       appointmentPlans={appointmentPlansResult.status === 'fulfilled' ? appointmentPlansResult.value : []}
       initialServiceType={serviceType}
+      requiresMembershipTierSelection={requiresMembershipTierSelection}
       workoutRoutines={workoutRoutinesResult.status === 'fulfilled' ? workoutRoutinesResult.value : []}
     />
   );

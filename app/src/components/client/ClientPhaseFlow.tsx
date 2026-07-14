@@ -24,7 +24,13 @@ import { GoogleScheduler, type SchedulerBookingDraft } from '@/components/schedu
 import { SignOutButton } from '@/components/auth/SignOutButton';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { ThemeToggle, usePersistedTheme } from '@/components/ui/ThemeToggle';
-import { parseBookingService, type BookingServiceType } from '@/lib/bookingServices';
+import {
+  BOOKING_SERVICES,
+  MEMBERSHIP_INVOICE_SERVICE_TYPES,
+  parseBookingService,
+  type BookingServiceType,
+  type MembershipInvoiceServiceType,
+} from '@/lib/bookingServices';
 import { submitBookingCheckoutNavigation } from '@/lib/bookingCheckoutNavigation';
 import type { AdminAppointmentPlan } from '@/lib/adminAppointmentPlans';
 import type { AdminWorkoutRoutine } from '@/lib/adminWorkoutRoutines';
@@ -32,6 +38,18 @@ import type { BillingSummary } from '@/lib/billing';
 
 type Phase = 'calendar' | 'workout' | 'journal';
 type SessionMode = 'none' | 'remote' | 'in-person';
+
+const MEMBERSHIP_PACKAGE_PRICES: Record<MembershipInvoiceServiceType, string> = {
+  sessions_4: '$120',
+  sessions_8: '$200',
+  sessions_12: '$300',
+};
+
+function asMembershipInvoiceServiceType(serviceType: BookingServiceType): MembershipInvoiceServiceType | null {
+  return MEMBERSHIP_INVOICE_SERVICE_TYPES.includes(serviceType as MembershipInvoiceServiceType)
+    ? (serviceType as MembershipInvoiceServiceType)
+    : null;
+}
 
 type DisplayWorkoutBlock = {
   name: string;
@@ -113,14 +131,21 @@ function useClientQueryState(initialServiceType: BookingServiceType): {
 export function ClientPhaseFlow({
   appointmentPlans = [],
   initialServiceType = 'free',
+  requiresMembershipTierSelection = false,
   workoutRoutines = [],
 }: {
   appointmentPlans?: AdminAppointmentPlan[];
   initialServiceType?: BookingServiceType;
+  requiresMembershipTierSelection?: boolean;
   workoutRoutines?: AdminWorkoutRoutine[];
 }) {
   const { sessionMode, serviceType, bookingStatus, bookingError, billingAction } = useClientQueryState(initialServiceType);
+  const [membershipTier, setMembershipTier] = useState<MembershipInvoiceServiceType | ''>(() =>
+    requiresMembershipTierSelection ? '' : asMembershipInvoiceServiceType(initialServiceType) ?? ''
+  );
   const hasSession = sessionMode !== 'none';
+  const hasMembershipTierPicker = requiresMembershipTierSelection || Boolean(asMembershipInvoiceServiceType(serviceType));
+  const activeServiceType = membershipTier || serviceType;
   const latestWorkoutRoutine = workoutRoutines[0] ?? null;
   const [phase, setPhase] = useState<Phase>('calendar');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -185,6 +210,10 @@ export function ClientPhaseFlow({
       setBookingMessage('Secure checkout did not open. Your session was not confirmed; try once more.');
     }
   }, [bookingError]);
+
+  useEffect(() => {
+    setMembershipTier(requiresMembershipTierSelection ? '' : asMembershipInvoiceServiceType(serviceType) ?? '');
+  }, [requiresMembershipTierSelection, serviceType]);
 
   useEffect(() => {
     if (!billingSummary?.requiresPayment) return;
@@ -408,7 +437,10 @@ export function ClientPhaseFlow({
               hasSession={hasSession}
               countdown={countdown}
               bookingLocked={paymentState.bookingLocked}
-              serviceType={serviceType}
+              serviceType={activeServiceType}
+              membershipTier={membershipTier}
+              showMembershipTierPicker={hasMembershipTierPicker}
+              requiresMembershipTierSelection={requiresMembershipTierSelection && !membershipTier}
               bookingMessage={bookingMessage}
               billingBusy={billingBusy}
               retryBusy={retryBusy}
@@ -421,6 +453,7 @@ export function ClientPhaseFlow({
               onOpenBillingPortal={openBillingPortal}
               onRetryBilling={retryBillingPayment}
               onEnablePushAlerts={enableBillingPushAlerts}
+              onSelectMembershipTier={setMembershipTier}
               onPreviewWorkout={() => (countdown === 0 || latestWorkoutRoutine) && setPhase('workout')}
               onBookSession={createBooking}
             />
@@ -473,6 +506,9 @@ function CalendarOnly({
   countdown,
   bookingLocked,
   serviceType,
+  membershipTier,
+  showMembershipTierPicker,
+  requiresMembershipTierSelection,
   bookingMessage,
   billingBusy,
   retryBusy,
@@ -485,6 +521,7 @@ function CalendarOnly({
   onOpenBillingPortal,
   onRetryBilling,
   onEnablePushAlerts,
+  onSelectMembershipTier,
   onPreviewWorkout,
   onBookSession,
 }: {
@@ -492,6 +529,9 @@ function CalendarOnly({
   countdown: number;
   bookingLocked: boolean;
   serviceType: BookingServiceType;
+  membershipTier: MembershipInvoiceServiceType | '';
+  showMembershipTierPicker: boolean;
+  requiresMembershipTierSelection: boolean;
   bookingMessage: string | null;
   billingBusy: boolean;
   retryBusy: boolean;
@@ -504,6 +544,7 @@ function CalendarOnly({
   onOpenBillingPortal: () => void;
   onRetryBilling: () => void;
   onEnablePushAlerts: () => void;
+  onSelectMembershipTier: (serviceType: MembershipInvoiceServiceType | '') => void;
   onPreviewWorkout: () => void;
   onBookSession: (draft: SchedulerBookingDraft) => Promise<'navigating' | void>;
 }) {
@@ -592,12 +633,35 @@ function CalendarOnly({
             workoutRoutines={workoutRoutines}
             onOpenWorkout={onPreviewWorkout}
           />
+          {showMembershipTierPicker ? (
+            <section className="mb-4 rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
+              <label className="block">
+                <span className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Membership package</span>
+                <select
+                  value={membershipTier}
+                  onChange={(event) => onSelectMembershipTier(event.target.value as MembershipInvoiceServiceType | '')}
+                  className="mt-2 min-h-12 w-full rounded-sm border border-border bg-bg/70 px-3 font-body text-sm text-text outline-none transition focus:border-gold"
+                >
+                  <option value="">Choose a package before Stripe</option>
+                  {MEMBERSHIP_INVOICE_SERVICE_TYPES.map((tier) => (
+                    <option key={tier} value={tier}>
+                      {BOOKING_SERVICES[tier].label} — {MEMBERSHIP_PACKAGE_PRICES[tier]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="mt-3 font-body text-xs leading-relaxed text-text-muted">
+                Choose the package for this session before secure checkout. You can change it here until Stripe opens.
+              </p>
+            </section>
+          ) : null}
           <GoogleScheduler
             title={sessionTitle}
             description={sessionDescription}
             location={isOnlineCoaching ? 'Online' : 'Stryv Society Fitness'}
             durationMinutes={60}
             serviceType={serviceType}
+            requiresServiceSelection={requiresMembershipTierSelection}
             onBookSession={onBookSession}
           />
           </>

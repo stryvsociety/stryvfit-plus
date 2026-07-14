@@ -8,6 +8,7 @@ import {
   expireBookingHold,
   expireStaleHolds,
   ensureGoogleEvent,
+  findActiveBookingForSlot,
   findActiveBookingForExactSlot,
   normalizeBookingDate,
   normalizeClientPhoneInput,
@@ -115,7 +116,7 @@ function normalizeCommunicationPreference(value: unknown): BookingCommunicationP
 
 async function reportBookingCheckoutFailure(input: {
   booking: BookingRow;
-  stage: 'free-session Stripe invoice' | 'Stripe Checkout' | 'checkout recovery';
+  stage: 'free-session Stripe invoice' | 'Stripe Checkout' | 'checkout recovery' | 'tier change';
   error: unknown;
 }) {
   try {
@@ -221,6 +222,39 @@ async function recoverCheckoutUrl(booking: BookingRow) {
   return null;
 }
 
+async function releaseBookingForTierChange(booking: BookingRow): Promise<NextResponse | null> {
+  if (booking.status === 'confirmed') {
+    return NextResponse.json(
+      { error: 'That time is already confirmed. Choose another time to book a different package.' },
+      { status: 409 }
+    );
+  }
+
+  if (booking.stripe_checkout_session_id) {
+    try {
+      const checkoutSession = await stripe().checkout.sessions.retrieve(booking.stripe_checkout_session_id);
+      if (checkoutSession.payment_status === 'paid' || checkoutSession.status === 'complete') {
+        return NextResponse.json(
+          { error: 'Stripe has already completed this checkout. Choose another time for a different package.' },
+          { status: 409 }
+        );
+      }
+      if (checkoutSession.status === 'open') {
+        await stripe().checkout.sessions.expire(booking.stripe_checkout_session_id);
+      }
+    } catch (error) {
+      await reportBookingCheckoutFailure({ booking, stage: 'tier change', error });
+      return NextResponse.json(
+        { error: 'Unable to switch the open checkout right now. Please try again.' },
+        { status: 502 }
+      );
+    }
+  }
+
+  await expireBookingHold(booking.id);
+  return null;
+}
+
 async function checkoutResponse(req: Request) {
   const appUser = await requireApiUser();
   if (appUser instanceof NextResponse) return appUser;
@@ -265,6 +299,16 @@ async function checkoutResponse(req: Request) {
 
     const recovery = await recoverCheckoutUrl(existingBooking);
     if (recovery) return recovery;
+  }
+
+  const bookingForSameSlot = await findActiveBookingForSlot({
+    appUserId: appUser.id,
+    startsAt: startsAt.toISOString(),
+    endsAt: endsAt.toISOString(),
+  });
+  if (bookingForSameSlot && bookingForSameSlot.service_type !== serviceType) {
+    const tierChangeResponse = await releaseBookingForTierChange(bookingForSameSlot);
+    if (tierChangeResponse) return tierChangeResponse;
   }
 
   if (appUser.role === 'client') {

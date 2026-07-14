@@ -364,6 +364,26 @@ export async function findActiveBookingForExactSlot(input: {
   return data ? (data as BookingRow) : null;
 }
 
+export async function findActiveBookingForSlot(input: {
+  appUserId: string;
+  startsAt: string;
+  endsAt: string;
+}): Promise<BookingRow | null> {
+  const { data, error } = await serviceClient()
+    .from('bookings')
+    .select(BOOKING_SELECT)
+    .eq('app_user_id', input.appUserId)
+    .eq('starts_at', input.startsAt)
+    .eq('ends_at', input.endsAt)
+    .in('status', ['held', 'pending_payment', 'confirmed'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? (data as BookingRow) : null;
+}
+
 export async function confirmFreeSessionBooking(input: {
   bookingId: string;
   customerId: string;

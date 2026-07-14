@@ -186,10 +186,16 @@ describe('admin surface regressions', () => {
     expect(billingSource).toContain('session.metadata?.booking_id ?? session.client_reference_id');
     expect(clientSource).toContain('You are booked. The team is finalizing your calendar invite.');
     expect(clientSource).toContain('Opening secure checkout. Stripe will collect your payment details next.');
+    expect(clientSource).toContain('Choose a package before Stripe');
+    expect(clientSource).toContain('requiresMembershipTierSelection');
     expect(schedulerSource).toContain('const bookingButtonDisabled = bookingPending || slotsLoading;');
     expect(schedulerSource).toContain('disabled={bookingButtonDisabled}');
     expect(schedulerSource).toContain('Secure checkout opens next');
+    expect(schedulerSource).toContain("setBookingError('Choose a membership package before opening Stripe checkout.')");
     expect(schedulerSource).toContain("setBookingError('Enter a mobile number before booking.')");
+    expect(checkoutSource).toContain('releaseBookingForTierChange');
+    expect(checkoutSource).toContain('checkout.sessions.expire');
+    expect(bookingsSource).toContain('findActiveBookingForSlot');
   });
 
   test('keeps the first-session guided booking flow full-screen and wired to real checkout and notices', () => {

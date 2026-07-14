@@ -231,6 +231,7 @@ export function GoogleScheduler({
   variant = 'card',
   onBookSession,
   manageAvailability = false,
+  requiresServiceSelection = false,
 }: {
   title: string;
   description: string;
@@ -242,6 +243,7 @@ export function GoogleScheduler({
   variant?: 'card' | 'timeline';
   onBookSession?: (draft: SchedulerBookingDraft) => Promise<SchedulerBookingSubmissionResult> | SchedulerBookingSubmissionResult;
   manageAvailability?: boolean;
+  requiresServiceSelection?: boolean;
 }) {
   const [availability, setAvailability] = useState<BookingAvailability>(DEFAULT_BOOKING_AVAILABILITY);
   const [selectedDuration, setSelectedDuration] = useState(() => normalizeDuration(durationMinutes));
@@ -292,6 +294,8 @@ export function GoogleScheduler({
       ? serviceType === 'free'
         ? 'Finalizing your session'
         : 'Secure checkout opens next'
+    : requiresServiceSelection
+      ? 'Choose a package first'
     : requiresMobile && !normalizedClientPhone
       ? 'Mobile required'
     : requiresConsentAcknowledgement && !consentAcknowledged
@@ -450,6 +454,10 @@ export function GoogleScheduler({
 
   async function bookSelectedSession() {
     if (!onBookSession || bookingPending) return;
+    if (requiresServiceSelection) {
+      setBookingError('Choose a membership package before opening Stripe checkout.');
+      return;
+    }
     if (requiresMobile && !normalizedClientPhone) {
       setBookingError('Enter a mobile number before booking.');
       return;
