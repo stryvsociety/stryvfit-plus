@@ -195,7 +195,7 @@ export function FirstSessionBookingFlow({
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(() => {
     if (initialBookingStatus === 'success') return 'Payment received. We are confirming your booking.';
-    if (initialBookingStatus === 'confirmed') return 'You are booked. Your confirmation is on the way.';
+    if (initialBookingStatus === 'confirmed') return 'You are booked. Your session is confirmed.';
     if (initialBookingStatus === 'calendar_pending') return 'You are booked. The team is finalizing your calendar invite.';
     return null;
   });
@@ -345,7 +345,7 @@ export function FirstSessionBookingFlow({
       setStatusMessage(
         payload.calendarStatus === 'pending'
           ? 'You are booked. The team is finalizing your calendar invite.'
-          : `You are booked. Your ${communicationPreference === 'text' ? 'text' : 'email'} confirmation is on the way.`
+          : 'You are booked. Your session is confirmed.'
       );
       setFurthestStep('payment');
     } catch (error) {
