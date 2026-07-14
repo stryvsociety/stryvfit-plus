@@ -17,6 +17,7 @@ export default async function BookPage({ searchParams }: BookPageProps) {
   const params = await searchParams;
   const serviceParam = Array.isArray(params?.service) ? params?.service[0] : params?.service;
   const bookingParam = Array.isArray(params?.booking) ? params?.booking[0] : params?.booking;
+  const bookingErrorParam = Array.isArray(params?.booking_error) ? params?.booking_error[0] : params?.booking_error;
   const intentParam = Array.isArray(params?.intent) ? params?.intent[0] : params?.intent;
   const sessionId = Array.isArray(params?.session_id) ? params?.session_id[0] : params?.session_id;
   const requestedServiceType = serviceParam ? parseBookingService(serviceParam) : null;
@@ -46,6 +47,7 @@ export default async function BookPage({ searchParams }: BookPageProps) {
       return (
         <FirstSessionBookingFlow
           initialBookingStatus={bookingParam ?? null}
+          initialBookingError={bookingErrorParam === 'checkout' ? 'checkout' : null}
           initialServiceType={requestedServiceType ?? 'free'}
           profile={{
             email: appUser.email,

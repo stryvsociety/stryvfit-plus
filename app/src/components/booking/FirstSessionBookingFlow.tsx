@@ -22,6 +22,7 @@ import { SignOutButton } from '@/components/auth/SignOutButton';
 import { BOOKING_CONSENT_FORM_URL, bookingRequiresConsent } from '@/lib/bookingConsent';
 import { combineBookingTzDateAndTime, formatCalendarDateKey } from '@/lib/bookingAvailability';
 import { BOOKING_SERVICES, type BookingServiceType } from '@/lib/bookingServices';
+import { submitBookingCheckoutNavigation } from '@/lib/bookingCheckoutNavigation';
 
 type BookingStep = 'basic' | 'date' | 'time' | 'package' | 'payment';
 type CommunicationPreference = 'email' | 'text';
@@ -37,6 +38,7 @@ type FirstSessionBookingFlowProps = {
   checkoutEndpoint?: string;
   forceMobileLayout?: boolean;
   showAccountActions?: boolean;
+  initialBookingError?: 'checkout' | null;
   initialBookingStatus?: string | null;
   initialServiceType?: BookingServiceType;
   profile: {
@@ -173,6 +175,7 @@ export function FirstSessionBookingFlow({
   checkoutEndpoint = '/api/bookings/checkout',
   forceMobileLayout = false,
   showAccountActions = true,
+  initialBookingError,
   initialBookingStatus,
   initialServiceType = 'free',
   profile,
@@ -191,7 +194,9 @@ export function FirstSessionBookingFlow({
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [serviceType, setServiceType] = useState<BookingServiceType>(initialServiceType);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(
+    initialBookingError === 'checkout' ? 'Secure checkout did not open. Your session was not confirmed; try once more.' : null
+  );
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(() => {
     if (initialBookingStatus === 'success') return 'Payment received. We are confirming your booking.';
@@ -305,7 +310,23 @@ export function FirstSessionBookingFlow({
     setSubmitError(null);
     setStatusMessage(requiresPayment ? 'Creating your Stripe checkout link.' : 'Confirming your session.');
 
+    let navigationStarted = false;
     try {
+      if (checkoutEndpoint === '/api/bookings/checkout') {
+        submitBookingCheckoutNavigation({
+          serviceType,
+          startsAt: start.toISOString(),
+          endsAt: end.toISOString(),
+          durationMinutes: SESSION_DURATION_MINUTES,
+          clientName: clientName.trim(),
+          clientPhone: normalizedPhone ?? undefined,
+          communicationPreference,
+          consentAcknowledged: requiresConsent ? true : undefined,
+        });
+        navigationStarted = true;
+        return;
+      }
+
       const res = await fetch(checkoutEndpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -352,7 +373,7 @@ export function FirstSessionBookingFlow({
       setSubmitError(error instanceof Error ? error.message : 'Unable to confirm booking.');
       setStatusMessage(null);
     } finally {
-      setSubmitting(false);
+      if (!navigationStarted) setSubmitting(false);
     }
   }
 

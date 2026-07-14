@@ -37,6 +37,78 @@ type CheckoutBody = {
   consentAcknowledged?: unknown;
 };
 
+type CheckoutResponsePayload = {
+  checkoutUrl?: string;
+  redirectUrl?: string;
+};
+
+function isNavigationTransport(req: Request): boolean {
+  return new URL(req.url).searchParams.get('transport') === 'navigation';
+}
+
+function formValue(form: FormData | null, field: string): string | undefined {
+  const value = form?.get(field);
+  return typeof value === 'string' ? value : undefined;
+}
+
+async function readCheckoutBody(req: Request): Promise<CheckoutBody | null> {
+  const contentType = req.headers.get('content-type') ?? '';
+  if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+    const form = await req.formData().catch(() => null);
+    return {
+      serviceType: formValue(form, 'serviceType'),
+      startsAt: formValue(form, 'startsAt'),
+      endsAt: formValue(form, 'endsAt'),
+      durationMinutes: formValue(form, 'durationMinutes'),
+      clientName: formValue(form, 'clientName'),
+      clientPhone: formValue(form, 'clientPhone'),
+      communicationPreference: formValue(form, 'communicationPreference'),
+      consentAcknowledged: formValue(form, 'consentAcknowledged'),
+    };
+  }
+  return (await req.json().catch(() => null)) as CheckoutBody | null;
+}
+
+function navigationBookUrl(req: Request, redirectUrl?: string): string {
+  const requestUrl = new URL(req.url);
+  if (redirectUrl) {
+    const target = new URL(redirectUrl, requestUrl);
+    return `${requestUrl.origin}${target.pathname}${target.search}${target.hash}`;
+  }
+  return `${requestUrl.origin}/book?booking=confirmed&intent=first-session`;
+}
+
+async function navigationResponse(req: Request, response: NextResponse): Promise<NextResponse> {
+  if (response.status === 401) return response;
+
+  const payload = (await response.clone().json().catch(() => ({}))) as CheckoutResponsePayload;
+  if (typeof payload.checkoutUrl === 'string' && payload.checkoutUrl.startsWith('https://')) {
+    return NextResponse.redirect(payload.checkoutUrl, { status: 303 });
+  }
+  if (typeof payload.redirectUrl === 'string') {
+    return NextResponse.redirect(navigationBookUrl(req, payload.redirectUrl), { status: 303 });
+  }
+  if (response.ok) {
+    return NextResponse.redirect(navigationBookUrl(req), { status: 303 });
+  }
+  return NextResponse.redirect(`${new URL(req.url).origin}/book?booking_error=checkout`, { status: 303 });
+}
+
+async function reportUnexpectedCheckoutFailure(error: unknown) {
+  try {
+    await captureServerIncident({
+      source: 'api',
+      route: '/api/bookings/checkout',
+      severity: 'high',
+      message: 'Booking checkout request failed before a response was created.',
+      context: { technicalMessage: error instanceof Error ? error.message : 'Unknown error' },
+      admin_action: 'Inspect the booking API, Supabase connection, and Stripe handoff before asking the client to retry.',
+    });
+  } catch {
+    // Keep the client response available even when incident persistence is unavailable.
+  }
+}
+
 function normalizeCommunicationPreference(value: unknown): BookingCommunicationPreference {
   return value === 'text' ? 'text' : 'email';
 }
@@ -149,11 +221,11 @@ async function recoverCheckoutUrl(booking: BookingRow) {
   return null;
 }
 
-export async function POST(req: Request) {
+async function checkoutResponse(req: Request) {
   const appUser = await requireApiUser();
   if (appUser instanceof NextResponse) return appUser;
 
-  const body = (await req.json().catch(() => null)) as CheckoutBody | null;
+  const body = await readCheckoutBody(req);
   const startsAt = normalizeBookingDate(body?.startsAt);
   const endsAt = normalizeBookingDate(body?.endsAt);
   const durationMinutes = Number(body?.durationMinutes ?? 60);
@@ -164,7 +236,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid booking window' }, { status: 400 });
   }
 
-  if (requiresConsent && body?.consentAcknowledged !== true) {
+  const consentAcknowledged = body?.consentAcknowledged === true || body?.consentAcknowledged === 'true';
+  if (requiresConsent && !consentAcknowledged) {
     return NextResponse.json(
       {
         error: 'Open and acknowledge the consent form before booking your session.',
@@ -223,7 +296,7 @@ export async function POST(req: Request) {
     clientPhone,
     communicationPreference,
     serviceType,
-    consentAcknowledged: requiresConsent ? true : undefined,
+    consentAcknowledged: requiresConsent ? consentAcknowledged : undefined,
     consentFormUrl: requiresConsent ? BOOKING_CONSENT_FORM_URL : undefined,
     startsAt: startsAt.toISOString(),
     endsAt: endsAt.toISOString(),
@@ -280,4 +353,21 @@ export async function POST(req: Request) {
       { status: 502 }
     );
   }
+}
+
+export async function POST(req: Request) {
+  const navigation = isNavigationTransport(req);
+  let response: NextResponse;
+
+  try {
+    response = await checkoutResponse(req);
+  } catch (error) {
+    await reportUnexpectedCheckoutFailure(error);
+    response = NextResponse.json(
+      { error: 'Unable to open secure checkout right now. Your session was not confirmed; please try again.' },
+      { status: 502 }
+    );
+  }
+
+  return navigation ? navigationResponse(req, response) : response;
 }

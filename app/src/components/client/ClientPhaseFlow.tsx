@@ -25,7 +25,7 @@ import { SignOutButton } from '@/components/auth/SignOutButton';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { ThemeToggle, usePersistedTheme } from '@/components/ui/ThemeToggle';
 import { parseBookingService, type BookingServiceType } from '@/lib/bookingServices';
-import { historyPathFromRedirectUrl } from '@/lib/clientNavigation';
+import { submitBookingCheckoutNavigation } from '@/lib/bookingCheckoutNavigation';
 import type { AdminAppointmentPlan } from '@/lib/adminAppointmentPlans';
 import type { AdminWorkoutRoutine } from '@/lib/adminWorkoutRoutines';
 import type { BillingSummary } from '@/lib/billing';
@@ -87,11 +87,13 @@ function useClientQueryState(initialServiceType: BookingServiceType): {
   sessionMode: SessionMode;
   serviceType: BookingServiceType;
   bookingStatus: string | null;
+  bookingError: 'checkout' | null;
   billingAction: 'update' | 'retry' | null;
 } {
   const [mode, setMode] = useState<SessionMode>('none');
   const [serviceType, setServiceType] = useState<BookingServiceType>(initialServiceType);
   const [bookingStatus, setBookingStatus] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState<'checkout' | null>(null);
   const [billingAction, setBillingAction] = useState<'update' | 'retry' | null>(null);
 
   useEffect(() => {
@@ -100,11 +102,12 @@ function useClientQueryState(initialServiceType: BookingServiceType): {
     setMode(requested === 'remote' || requested === 'in-person' ? requested : 'none');
     setServiceType(params.has('service') ? parseBookingService(params.get('service')) : initialServiceType);
     setBookingStatus(params.get('booking'));
+    setBookingError(params.get('booking_error') === 'checkout' ? 'checkout' : null);
     const billing = params.get('billing');
     setBillingAction(billing === 'update' || billing === 'retry' ? billing : null);
   }, [initialServiceType]);
 
-  return { sessionMode: mode, serviceType, bookingStatus, billingAction };
+  return { sessionMode: mode, serviceType, bookingStatus, bookingError, billingAction };
 }
 
 export function ClientPhaseFlow({
@@ -116,7 +119,7 @@ export function ClientPhaseFlow({
   initialServiceType?: BookingServiceType;
   workoutRoutines?: AdminWorkoutRoutine[];
 }) {
-  const { sessionMode, serviceType, bookingStatus, billingAction } = useClientQueryState(initialServiceType);
+  const { sessionMode, serviceType, bookingStatus, bookingError, billingAction } = useClientQueryState(initialServiceType);
   const hasSession = sessionMode !== 'none';
   const latestWorkoutRoutine = workoutRoutines[0] ?? null;
   const [phase, setPhase] = useState<Phase>('calendar');
@@ -178,6 +181,12 @@ export function ClientPhaseFlow({
   }, []);
 
   useEffect(() => {
+    if (bookingError === 'checkout') {
+      setBookingMessage('Secure checkout did not open. Your session was not confirmed; try once more.');
+    }
+  }, [bookingError]);
+
+  useEffect(() => {
     if (!billingSummary?.requiresPayment) return;
     setPaymentOpen(true);
   }, [billingSummary?.requiresPayment]);
@@ -200,42 +209,16 @@ export function ClientPhaseFlow({
   }
 
   async function createBooking(draft: SchedulerBookingDraft) {
-    const res = await fetch('/api/bookings/checkout', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(draft),
+    setBookingMessage('Opening secure checkout. Stripe will collect your payment details next.');
+    submitBookingCheckoutNavigation({
+      serviceType: draft.serviceType,
+      startsAt: draft.startsAt,
+      endsAt: draft.endsAt,
+      durationMinutes: draft.durationMinutes,
+      clientPhone: draft.clientPhone,
+      consentAcknowledged: draft.consentAcknowledged,
     });
-    const payload = (await res.json().catch(() => ({}))) as {
-      error?: string;
-      checkoutUrl?: string;
-      redirectUrl?: string;
-      status?: string;
-      calendarStatus?: string;
-    };
-
-    if (payload.checkoutUrl) {
-      setBookingMessage('Opening secure checkout. Stripe will collect your payment details next.');
-      window.location.assign(payload.checkoutUrl);
-      return;
-    }
-
-    if (payload.redirectUrl) {
-      if (!res.ok) {
-        window.location.assign(payload.redirectUrl);
-        return;
-      }
-      window.history.replaceState(null, '', historyPathFromRedirectUrl(payload.redirectUrl));
-    }
-
-    if (!res.ok) {
-      throw new Error(payload.error ?? 'Unable to create booking');
-    }
-
-    setBookingMessage(
-      payload.calendarStatus === 'pending'
-        ? 'You are booked. Your calendar invite is being finalized by the team.'
-        : 'You are booked. Your calendar confirmation is on the way.'
-    );
+    return 'navigating' as const;
   }
 
   async function openBillingPortal() {
@@ -522,7 +505,7 @@ function CalendarOnly({
   onRetryBilling: () => void;
   onEnablePushAlerts: () => void;
   onPreviewWorkout: () => void;
-  onBookSession: (draft: SchedulerBookingDraft) => Promise<void>;
+  onBookSession: (draft: SchedulerBookingDraft) => Promise<'navigating' | void>;
 }) {
   const isFreeFirstSession = serviceType === 'free';
   const isOnlineCoaching = serviceType.startsWith('online_coaching_');

@@ -55,6 +55,8 @@ export type SchedulerBookingDraft = {
   consentAcknowledged?: boolean;
 };
 
+export type SchedulerBookingSubmissionResult = 'navigating' | void;
+
 function normalizeDuration(durationMinutes: number): number {
   return durationOptions.includes(durationMinutes) ? durationMinutes : durationOptions[0];
 }
@@ -238,7 +240,7 @@ export function GoogleScheduler({
   serviceType?: BookingServiceType;
   tone?: 'dark' | 'light';
   variant?: 'card' | 'timeline';
-  onBookSession?: (draft: SchedulerBookingDraft) => Promise<void> | void;
+  onBookSession?: (draft: SchedulerBookingDraft) => Promise<SchedulerBookingSubmissionResult> | SchedulerBookingSubmissionResult;
   manageAvailability?: boolean;
 }) {
   const [availability, setAvailability] = useState<BookingAvailability>(DEFAULT_BOOKING_AVAILABILITY);
@@ -465,8 +467,9 @@ export function GoogleScheduler({
 
     setBookingPending(true);
     setBookingError(null);
+    let navigationStarted = false;
     try {
-      await onBookSession({
+      const result = await onBookSession({
         serviceType,
         startsAt: start.toISOString(),
         endsAt: end.toISOString(),
@@ -476,6 +479,10 @@ export function GoogleScheduler({
         description: [description, context].filter(Boolean).join('\n\n'),
         consentAcknowledged: requiresConsent ? consentAcknowledged : undefined,
       });
+      if (result === 'navigating') {
+        navigationStarted = true;
+        return;
+      }
       setSessionBooked(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Booking failed';
@@ -498,7 +505,7 @@ export function GoogleScheduler({
           : message
       );
     } finally {
-      setBookingPending(false);
+      if (!navigationStarted) setBookingPending(false);
     }
   }
 
@@ -954,6 +961,7 @@ export function GoogleScheduler({
       ) : null}
 
       {onBookSession ? (
+        <>
         <button
           type="button"
           onClick={bookSelectedSession}
@@ -966,12 +974,13 @@ export function GoogleScheduler({
           <span className="mt-1 font-caption text-[8px] uppercase tracking-[0.12em] opacity-75">
             {bookingButtonSubtext}
           </span>
-          {bookingError ? (
-            <span className="mt-2 max-w-xs text-center font-body text-[11px] normal-case tracking-normal text-bg/80">
-              {bookingError}
-            </span>
-          ) : null}
         </button>
+        {bookingError ? (
+          <p role="alert" className="mt-3 rounded-sm border border-gold/35 bg-surface-2 px-4 py-3 text-center font-body text-sm leading-relaxed text-text-muted">
+            {bookingError}
+          </p>
+        ) : null}
+        </>
       ) : (
         <a
           href={eventUrl}
