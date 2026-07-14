@@ -111,6 +111,8 @@ Source ledger:
 - Free first-session booking now creates or refreshes the signed-in client's Stripe Customer record and a zero-dollar Stripe invoice before the appointment is confirmed. The booking row stores the Stripe customer and invoice IDs, so the record can be reconciled without relying on a browser response.
 - A mobile retry for the exact same active slot now reuses the original free-session invoice or live Stripe Checkout Session instead of creating a second booking. Expired free and paid holds both release their slot.
 - Local production verification passed for the sandbox flow. The browser bridge did not honor its 390px viewport override, so physical phone confirmation remains a required post-deploy gate rather than being represented as local mobile proof.
+- Cloudflare Worker version `9bf96ef1-86f6-4634-a066-7622c6d58edd` is live with the booking-recovery changes. Public smoke checks confirmed the retired banner is absent, the unsigned booking-checkout and membership-billing endpoints return `401`, and `/meals` redirects to `/book`.
+- The live worker has no `RESEND_API_KEY`, so the completed-session UI confirms the booking and calendar handoff without claiming an email or text message was sent. Stripe-hosted invoice delivery remains independent of that app notification provider.
 
 ## Mobile Membership Invoice Handoff - 2026-07-14
 
