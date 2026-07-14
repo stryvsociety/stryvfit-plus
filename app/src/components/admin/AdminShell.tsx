@@ -21,7 +21,6 @@ import {
   LifeBuoy,
   PanelLeftClose,
   PanelLeftOpen,
-  Salad,
   UsersRound,
 } from 'lucide-react';
 import { BrandWordmark } from '@/components/BrandWordmark';
@@ -29,7 +28,7 @@ import { Insignia } from '@/components/Insignia';
 import { SignOutButton } from '@/components/auth/SignOutButton';
 import { ThemeToggle, type ThemeMode } from '@/components/ui/ThemeToggle';
 
-export type AdminSection = 'appointments' | 'workouts' | 'meals' | 'clients' | 'support';
+export type AdminSection = 'appointments' | 'workouts' | 'clients' | 'support';
 
 type Breadcrumb = {
   label: string;
@@ -44,7 +43,6 @@ type AdminShellProps = {
   headerControl?: ReactNode;
   onAppointments?: () => void;
   onClients?: () => void;
-  onMeals?: () => void;
   onThemeChange?: (theme: ThemeMode) => void;
   theme?: ThemeMode;
   title: string;
@@ -53,7 +51,6 @@ type AdminShellProps = {
 const adminSections = [
   { id: 'appointments', label: 'Appointments', href: '/admin/pulse', icon: CalendarClock },
   { id: 'workouts', label: 'Workouts', href: '/admin/workouts', icon: Dumbbell },
-  { id: 'meals', label: 'Meals', href: '/admin/pulse?tab=meals', icon: Salad },
   { id: 'clients', label: 'Clients', href: '/admin/pulse?tab=clients', icon: UsersRound },
   { id: 'support', label: 'Support', href: '/admin/solvys-support', icon: LifeBuoy },
 ] satisfies Array<{
@@ -71,7 +68,6 @@ export function AdminShell({
   headerControl,
   onAppointments,
   onClients,
-  onMeals,
   onThemeChange,
   theme = 'light',
   title,
@@ -180,7 +176,6 @@ export function AdminShell({
             collapsed={sidebarCollapsed}
             onAppointments={onAppointments}
             onClients={onClients}
-            onMeals={onMeals}
           />
           <div className="mt-auto space-y-3 border-t border-[#dedbd4] pt-4">
             {onThemeChange ? (
@@ -239,7 +234,6 @@ export function AdminShell({
                   horizontal
                   onAppointments={onAppointments}
                   onClients={onClients}
-                  onMeals={onMeals}
                 />
               </div>
             </div>
@@ -344,14 +338,12 @@ function AdminNavList({
   horizontal = false,
   onAppointments,
   onClients,
-  onMeals,
 }: {
   active: AdminSection;
   collapsed?: boolean;
   horizontal?: boolean;
   onAppointments?: () => void;
   onClients?: () => void;
-  onMeals?: () => void;
 }) {
   const navClassName = horizontal
     ? 'flex gap-2 overflow-x-auto pb-1'
@@ -365,9 +357,7 @@ function AdminNavList({
         const onClick =
           section.id === 'appointments'
             ? onAppointments
-            : section.id === 'meals'
-              ? onMeals
-              : section.id === 'clients'
+            : section.id === 'clients'
                 ? onClients
                 : undefined;
 

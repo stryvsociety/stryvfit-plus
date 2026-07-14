@@ -14,7 +14,6 @@ import {
   NotebookPen,
   Play,
   RefreshCw,
-  Salad,
   Video,
   WalletCards,
   X,
@@ -22,16 +21,16 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ReactNode, TouchEvent } from 'react';
 import { GoogleScheduler, type SchedulerBookingDraft } from '@/components/scheduling/GoogleScheduler';
-import { MealPrepPlanner } from '@/components/meals/MealPrepPlanner';
 import { SignOutButton } from '@/components/auth/SignOutButton';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { ThemeToggle, usePersistedTheme } from '@/components/ui/ThemeToggle';
 import { parseBookingService, type BookingServiceType } from '@/lib/bookingServices';
+import { historyPathFromRedirectUrl } from '@/lib/clientNavigation';
 import type { AdminAppointmentPlan } from '@/lib/adminAppointmentPlans';
 import type { AdminWorkoutRoutine } from '@/lib/adminWorkoutRoutines';
 import type { BillingSummary } from '@/lib/billing';
 
-type Phase = 'calendar' | 'workout' | 'meal-prep' | 'journal';
+type Phase = 'calendar' | 'workout' | 'journal';
 type SessionMode = 'none' | 'remote' | 'in-person';
 
 type DisplayWorkoutBlock = {
@@ -195,7 +194,7 @@ export function ClientPhaseFlow({
     }, 850);
   }
 
-  function handleAdvance(next: Phase = phase === 'workout' ? 'meal-prep' : 'journal') {
+  function handleAdvance(next: Phase = 'journal') {
     if (phase === 'workout' && !workoutComplete) return;
     deliberateNext(next);
   }
@@ -225,7 +224,7 @@ export function ClientPhaseFlow({
         window.location.assign(payload.redirectUrl);
         return;
       }
-      window.history.replaceState(null, '', payload.redirectUrl);
+      window.history.replaceState(null, '', historyPathFromRedirectUrl(payload.redirectUrl));
     }
 
     if (!res.ok) {
@@ -241,6 +240,11 @@ export function ClientPhaseFlow({
 
   async function openBillingPortal() {
     if (billingBusy) return;
+    const hostedInvoiceUrl = billingSummary?.requiresPayment ? billingSummary.latestInvoice?.hostedInvoiceUrl : null;
+    if (hostedInvoiceUrl) {
+      window.location.assign(hostedInvoiceUrl);
+      return;
+    }
     setBillingBusy(true);
     setBillingMessage(null);
     try {
@@ -411,18 +415,8 @@ export function ClientPhaseFlow({
               routine={latestWorkoutRoutine}
               complete={workoutComplete}
               onComplete={() => setWorkoutComplete(true)}
-              onAdvance={() => handleAdvance('meal-prep')}
-            />
-          ) : phase === 'meal-prep' ? (
-            <PhaseFrame
-              key="meal"
-              title="Meal prep"
-              icon={<Salad className="h-5 w-5" />}
               onAdvance={() => handleAdvance('journal')}
-              advanceLabel="Continue to journal"
-            >
-              <MealPrepPlanner />
-            </PhaseFrame>
+            />
           ) : phase === 'journal' ? (
             <JournalPhase key="journal" />
           ) : (
@@ -456,7 +450,7 @@ export function ClientPhaseFlow({
         onOpenChange={setMenuOpen}
         onSelect={(next) => {
           setMenuOpen(false);
-          if (next === 'meal-prep' || next === 'journal') deliberateNext(next);
+          if (next === 'journal') deliberateNext(next);
           else setPhase(next);
         }}
       />
@@ -664,6 +658,7 @@ function BillingPanel({
 }) {
   const dueLabel = billing?.requiresPayment ? formatBillingDate(billing.dueDate) : formatBillingDate(billing?.renewalDate);
   const dueTitle = billing?.requiresPayment ? 'Due date' : 'Renews';
+  const stripeActionLabel = billing?.requiresPayment && billing.latestInvoice?.hostedInvoiceUrl ? 'Open Stripe invoice' : 'Update billing';
 
   return (
     <section className="mb-4 rounded-md border border-gold/20 bg-surface-2/80 p-4 shadow-glass">
@@ -687,7 +682,7 @@ function BillingPanel({
             className="ios-pill inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-text-muted transition hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-60"
           >
             <WalletCards className="h-4 w-4" />
-            {billingBusy ? 'Opening' : 'Update billing'}
+            {billingBusy ? 'Opening' : stripeActionLabel}
           </button>
           {billing?.canRetry ? (
             <button
@@ -703,23 +698,12 @@ function BillingPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <BillingStat label={dueTitle} value={dueLabel} />
-        <BillingStat label="Payment method" value={billing?.paymentMethod?.label ?? 'No method linked'} />
         <BillingStat label="Invoice" value={billing?.latestInvoice?.amountDueLabel ?? 'Current'} />
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {(billing?.acceptedPaymentMethods ?? []).map((method) => (
-          <span
-            key={method.id}
-            className={`ios-pill inline-flex min-h-8 items-center rounded-full border px-3 font-caption text-[9px] uppercase tracking-[0.12em] ${
-              method.available ? 'border-gold/40 text-gold' : 'border-border text-text-dim'
-            }`}
-          >
-            {method.label}: {method.available ? 'On' : 'Needs Stripe activation'}
-          </span>
-        ))}
+      <div className="mt-4 flex items-center gap-2">
         <button
           type="button"
           onClick={onEnablePushAlerts}
@@ -1142,7 +1126,6 @@ function FloatingMenu({
 }) {
   const items: { phase: Phase; label: string; icon: ReactNode }[] = [
     { phase: 'calendar', label: 'Calendar', icon: <CalendarDays className="h-4 w-4" /> },
-    { phase: 'meal-prep', label: 'Meal prep', icon: <Salad className="h-4 w-4" /> },
     { phase: 'journal', label: 'Journal', icon: <NotebookPen className="h-4 w-4" /> },
   ];
 
@@ -1214,6 +1197,7 @@ function PaymentModal({
   onOpenBillingPortal: () => void;
   onRetryBilling: () => void;
 }) {
+  const hostedInvoice = billingSummary?.requiresPayment ? billingSummary.latestInvoice?.hostedInvoiceUrl : null;
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -1228,29 +1212,31 @@ function PaymentModal({
         className="w-full max-w-md rounded-lg border border-gold/25 bg-surface-2 p-5 shadow-glass-lg"
       >
         <WalletCards className="h-7 w-7 text-gold" strokeWidth={1.6} />
-        <h2 className="mt-4 font-section text-4xl leading-none">Update payment</h2>
+        <h2 className="mt-4 font-section text-4xl leading-none">{hostedInvoice ? 'Pay Stripe invoice' : 'Update payment'}</h2>
         <p className="mt-3 font-body text-sm leading-relaxed text-text-muted">
           We only surface this during the phase change. {bookingLocked ? 'Booking is paused until the balance is current.' : 'Your next phase unlocks once the balance is current.'}
           {billingSummary?.latestInvoice?.amountDueLabel ? ` Amount due: ${billingSummary.latestInvoice.amountDueLabel}.` : ''}
         </p>
         {billingMessage ? <p className="mt-3 font-body text-xs leading-relaxed text-text-muted">{billingMessage}</p> : null}
-        <div className="mt-5 grid grid-cols-3 gap-2">
+        <div className={`mt-5 grid gap-2 ${hostedInvoice ? 'grid-cols-2' : 'grid-cols-3'}`}>
           <button
             type="button"
             onClick={onOpenBillingPortal}
             disabled={billingBusy}
             className="ios-pill min-h-11 rounded-full bg-gold px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-bg disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {billingBusy ? 'Opening' : 'Update Billing'}
+            {billingBusy ? 'Opening' : hostedInvoice ? 'Open Stripe invoice' : 'Update Billing'}
           </button>
-          <button
-            type="button"
-            onClick={onRetryBilling}
-            disabled={retryBusy || !billingSummary?.canRetry}
-            className="ios-pill min-h-11 rounded-full border border-gold/40 px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-gold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {retryBusy ? 'Retrying' : 'Retry'}
-          </button>
+          {!hostedInvoice ? (
+            <button
+              type="button"
+              onClick={onRetryBilling}
+              disabled={retryBusy || !billingSummary?.canRetry}
+              className="ios-pill min-h-11 rounded-full border border-gold/40 px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-gold disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {retryBusy ? 'Retrying' : 'Retry'}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onClose}
@@ -1277,6 +1263,7 @@ function BillingRecoveryToast({
   onOpenBillingPortal: () => void;
   onRetryBilling: () => void;
 }) {
+  const hostedInvoice = billing.requiresPayment ? billing.latestInvoice?.hostedInvoiceUrl : null;
   return (
     <motion.aside
       initial={{ opacity: 0, y: 18, scale: 0.98 }}
@@ -1292,7 +1279,7 @@ function BillingRecoveryToast({
             <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-gold">Payment needs attention</p>
             <p className="mt-1 font-body text-xs leading-relaxed text-text-muted">
               {billing.latestInvoice?.amountDueLabel
-                ? `${billing.latestInvoice.amountDueLabel} is due for your monthly subscription.`
+                ? `${billing.latestInvoice.amountDueLabel} is due in Stripe.`
                 : 'Your monthly subscription needs a billing update.'}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1302,16 +1289,18 @@ function BillingRecoveryToast({
                 disabled={billingBusy}
                 className="ios-pill inline-flex min-h-9 items-center justify-center rounded-full bg-gold px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-bg transition-colors hover:bg-gold-deep disabled:opacity-60"
               >
-                {billingBusy ? 'Opening' : 'Update Billing'}
+                {billingBusy ? 'Opening' : hostedInvoice ? 'Open Stripe invoice' : 'Update Billing'}
               </button>
-              <button
-                type="button"
-                onClick={onRetryBilling}
-                disabled={retryBusy || !billing.canRetry}
-                className="ios-pill inline-flex min-h-9 items-center justify-center rounded-full border border-gold/40 px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-gold transition-colors hover:border-gold disabled:opacity-60"
-              >
-                {retryBusy ? 'Retrying' : 'Retry'}
-              </button>
+              {!hostedInvoice ? (
+                <button
+                  type="button"
+                  onClick={onRetryBilling}
+                  disabled={retryBusy || !billing.canRetry}
+                  className="ios-pill inline-flex min-h-9 items-center justify-center rounded-full border border-gold/40 px-4 font-control text-[11px] font-semibold uppercase tracking-[0.08em] text-gold transition-colors hover:border-gold disabled:opacity-60"
+                >
+                  {retryBusy ? 'Retrying' : 'Retry'}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

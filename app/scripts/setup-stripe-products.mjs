@@ -64,12 +64,6 @@ const REQUIRED_WEBHOOK_EVENTS = [
   'invoice.payment_action_required',
   'invoice.paid',
 ];
-const REQUIRED_PAYMENT_METHODS = [
-  { key: 'apple_pay', label: 'Apple Pay', env: 'STRIPE_ACCEPTS_APPLE_PAY' },
-  { key: 'cashapp', label: 'Cash App Pay', env: 'STRIPE_ACCEPTS_CASH_APP_PAY' },
-  { key: 'paypal', label: 'PayPal', env: 'STRIPE_ACCEPTS_PAYPAL' },
-];
-
 /**
  * Each entry maps a code service type -> Stripe product + price.
  * `envVar` is the variable the app reads (see src/lib/bookingServices.ts).
@@ -241,31 +235,6 @@ async function ensureWebhookEvents() {
   return { endpoint: updated, missing };
 }
 
-async function ensurePaymentMethodPreferences() {
-  const configurations = await stripe.paymentMethodConfigurations.list({ limit: 1 });
-  const config = configurations.data[0];
-  if (!config) return [];
-
-  let current = config;
-  for (const method of REQUIRED_PAYMENT_METHODS) {
-    if (method.key === 'apple_pay') continue;
-    try {
-      current = await stripe.paymentMethodConfigurations.update(current.id, {
-        [method.key]: { display_preference: { preference: 'on' } },
-      });
-    } catch {
-      // Keep auditing below; some methods require manual approval or are not
-      // available for the account region.
-    }
-  }
-
-  return REQUIRED_PAYMENT_METHODS.map((method) => ({
-    ...method,
-    available: current[method.key]?.available === true,
-    preference: current[method.key]?.display_preference?.preference ?? 'unknown',
-  }));
-}
-
 async function main() {
   console.log(`\nStripe mode: ${mode}  |  currency: ${currency.toUpperCase()}`);
   console.log('Provisioning StryvFit+ products and prices...\n');
@@ -313,22 +282,6 @@ async function main() {
   } else {
     console.log(`stripe_webhook            missing endpoint ${webhookUrl}`);
     console.log('Create it in Stripe Dashboard, then store the new signing secret as STRIPE_WEBHOOK_SECRET.');
-  }
-
-  const paymentMethods = await ensurePaymentMethodPreferences();
-  for (const method of paymentMethods) {
-    console.log(
-      `payment_method            ${method.label.padEnd(13)} available=${method.available} preference=${method.preference}`
-    );
-    envLines.push(`${method.env}=${method.available ? 'true' : 'false'}`);
-  }
-  const unavailable = paymentMethods.filter((method) => !method.available);
-  if (unavailable.length > 0) {
-    console.log(
-      `payment_method_attention  Activate/approve in Stripe Dashboard: ${unavailable
-        .map((method) => method.label)
-        .join(', ')}`
-    );
   }
 
   console.log('\n--- Add these to .env / Cloudflare Worker secrets ---\n');

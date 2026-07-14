@@ -4,11 +4,8 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
-  ChefHat,
   ChevronDown,
   ChevronUp,
-  ClipboardList,
-  Flame,
   Inbox,
   MapPin,
   Pencil,
@@ -16,30 +13,26 @@ import {
   Plus,
   Save,
   Search,
-  ShoppingCart,
   Trash2,
-  Utensils,
   UserPlus,
   UsersRound,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GoogleScheduler, type SchedulerBookingDraft } from '@/components/scheduling/GoogleScheduler';
-import { MealPrepPlanner, type MealPrepPlanSnapshot } from '@/components/meals/MealPrepPlanner';
 import { SystemHealthPanel } from '@/components/incidents/SystemHealthPanel';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { FloatingPostToClientButton } from '@/components/admin/FloatingPostToClientButton';
 import { usePersistedTheme } from '@/components/ui/ThemeToggle';
-import { adminBookingClientName, type AdminBookingSummary, type AdminClientSummary, type BookingStatus } from '@/lib/bookings';
+import type { AdminBookingSummary, AdminClientSummary, BookingStatus } from '@/lib/bookings';
 import { BOOKING_SERVICES } from '@/lib/bookingServices';
 import { combineBookingTzDateAndTime } from '@/lib/bookingAvailability';
 import { clientLifecycleLabel } from '@/lib/clientLifecycle';
 
-export type AdminTab = 'appointments' | 'meals' | 'clients';
+export type AdminTab = 'appointments' | 'clients';
 
 const adminTabLabels: Record<AdminTab, string> = {
   appointments: 'Appointments',
-  meals: 'Meals',
   clients: 'Clients',
 };
 
@@ -84,7 +77,7 @@ type AdminClientRequest = {
   id: string;
   clientEmail: string | null;
   clientName: string | null;
-  kind: 'trainer-note' | 'meal-plan-change';
+  kind: string;
   message: string;
   status: 'new' | 'reviewed' | 'archived';
   createdAt: string;
@@ -133,31 +126,16 @@ const emptyClient: AdminClientSummary = {
   payment: 'No billing yet',
 };
 
-const defaultNutritionTarget = {
-  calories: 'Set target',
-  protein: 'Set target',
-  cadence: 'Set cadence',
-  note: 'Use this workspace to prepare the next coach-approved meal and training plan.',
-  compliance: 'Review',
-};
-
-const nutritionWeek = [
-  { day: 'Mon', focus: 'High protein', meal: 'Steak bowl', status: 'Ready' },
-  { day: 'Tue', focus: 'Training carbs', meal: 'Chicken pasta', status: 'Needs pick' },
-  { day: 'Wed', focus: 'Lean reset', meal: 'Turkey plate', status: 'Ready' },
-  { day: 'Thu', focus: 'Recovery', meal: 'Salmon greens', status: 'Review' },
-  { day: 'Fri', focus: 'Flex slot', meal: 'Coach choice', status: 'Open' },
-];
-
-const prepChecklist = [
-  { label: 'Ideal Nutrition menu pulled', status: 'Live' },
-  { label: 'Client brief generated', status: 'Draft' },
-  { label: 'Google check-in scheduled', status: 'Queued' },
-  { label: 'StryvFit+ publish state', status: 'Ready' },
+const appointmentPreparationChecklist = [
+  { label: 'Review client goals', status: 'Ready' },
+  { label: 'Confirm session focus', status: 'Ready' },
+  { label: 'Prepare training block', status: 'Queued' },
 ];
 
 function clientNameFromBooking(booking: AdminBookingSummary): string {
-  return adminBookingClientName(booking);
+  const clientName = booking.clientName?.trim();
+  const scheduledName = clientName?.match(/^stryvfit\+\s*(?::|-)?\s*session\s+for\s+(.+)$/i)?.[1]?.trim();
+  return scheduledName || clientName || booking.clientEmail?.trim() || 'StryvFit+ client';
 }
 
 function clientRosterKey(email: string | null | undefined, name: string): string {
@@ -523,7 +501,6 @@ export function TrainerOpsStudio({
   const [requests, setRequests] = useState<AdminClientRequest[]>([]);
   const [requestsError, setRequestsError] = useState<string | null>(null);
   const [updatingRequestId, setUpdatingRequestId] = useState<string | null>(null);
-  const [mealPlanSnapshot, setMealPlanSnapshot] = useState<MealPrepPlanSnapshot | null>(null);
   const baseClients = useMemo(
     () =>
       upsertClientSummary(
@@ -603,44 +580,7 @@ export function TrainerOpsStudio({
     let successLabel = `Posted client update to ${selected.name}.`;
     let body: Record<string, unknown>;
 
-    if (tab === 'meals') {
-      if (!mealPlanSnapshot || mealPlanSnapshot.selectedMeals.length === 0) {
-        setPostPending(true);
-        setPostError('Choose at least one meal before posting this plan.');
-        return;
-      }
-
-      endpoint = '/api/admin/meal-plans';
-      successLabel = `Posted meal plan to ${selected.name}.`;
-      body = {
-        ...target,
-        title: `Meal plan for ${selected.name}`,
-        summary: `${mealPlanSnapshot.selectedMeals.length} Ideal Nutrition meals for ${mealPlanSnapshot.workoutFocus}.`,
-        workoutFocus: mealPlanSnapshot.workoutFocus,
-        meals: mealPlanSnapshot.selectedMeals.map((meal) => ({
-          id: meal.id,
-          name: meal.name,
-          subtitle: meal.subtitle,
-          price_cents: meal.price_cents,
-          calories: meal.calories,
-          protein_g: meal.protein_g,
-          carbs_g: meal.carbs_g,
-          fat_g: meal.fat_g,
-          product_url: meal.product_url,
-          image_url: meal.image_url,
-          tags: meal.tags,
-        })),
-        totals: {
-          costCents: mealPlanSnapshot.totals.cost,
-          calories: mealPlanSnapshot.totals.calories,
-          proteinG: mealPlanSnapshot.totals.protein,
-          carbsG: mealPlanSnapshot.totals.carbs,
-          fatG: mealPlanSnapshot.totals.fat,
-        },
-        brief: mealPlanSnapshot.brief,
-        publish: true,
-      };
-    } else if (tab === 'appointments') {
+    if (tab === 'appointments') {
       const booking = pickPublishBooking(bookings, selected);
       endpoint = '/api/admin/appointment-plans';
       successLabel = `Posted appointment plan to ${selected.name}.`;
@@ -655,14 +595,14 @@ export function TrainerOpsStudio({
         scheduledAt: booking?.startsAt,
         durationMinutes: booking?.durationMinutes ?? 60,
         location: booking?.source === 'google_calendar' ? 'Google Calendar' : 'StryvFit session',
-        preparation: prepChecklist.map((item) => ({
+        preparation: appointmentPreparationChecklist.map((item) => ({
           label: item.label,
           detail: item.status,
           completed: item.status === 'Live' || item.status === 'Ready',
         })),
         followUp: {
           message: `Review ${selected.name}'s next session plan after the appointment.`,
-          tasks: ['Confirm attendance', 'Update next workout block', 'Publish any meal-plan changes'],
+          tasks: ['Confirm attendance', 'Update next workout block', 'Publish client follow-up'],
         },
         publish: true,
       };
@@ -927,9 +867,7 @@ export function TrainerOpsStudio({
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tab') === 'meals') {
-      setTab('meals');
-    } else if (params.get('tab') === 'clients') {
+    if (params.get('tab') === 'clients') {
       setTab('clients');
     }
 
@@ -989,7 +927,6 @@ export function TrainerOpsStudio({
       breadcrumbs={[{ label: 'Admin', href: '/admin/pulse' }, { label: adminTabLabels[tab] }]}
       onAppointments={() => selectTab('appointments')}
       onClients={() => selectTab('clients')}
-      onMeals={() => selectTab('meals')}
       onThemeChange={setTheme}
       theme={theme}
       title={adminTabLabels[tab]}
@@ -1159,7 +1096,7 @@ export function TrainerOpsStudio({
                       selectedRequests.map((request) => (
                         <article key={request.id} className="rounded-md border border-[#e6e2da] bg-white p-3">
                           <p className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">
-                            {request.kind === 'meal-plan-change' ? 'Meal change' : 'Trainer note'}
+                            Client request
                           </p>
                           <p className="mt-1 line-clamp-3 font-body text-xs leading-relaxed text-[#6d675f]">
                             {request.message}
@@ -1256,21 +1193,6 @@ export function TrainerOpsStudio({
                   onCancelBooking={cancelBookingById}
                   onDirty={markPostPending}
                   onUpdateBooking={updateBookingById}
-                />
-              ) : null}
-              {tab === 'meals' ? (
-                <MealsPanel
-                  key="meals"
-                  selectedClient={selected.name}
-                  onAdminPlanSnapshot={setMealPlanSnapshot}
-                  onOpenClientProfile={() => {
-                    const clientProfileHref = `/admin/pulse?tab=clients&client=${encodeURIComponent(selected.name)}`;
-                    setSelectedClient(selected.name);
-                    setTab('clients');
-                    window.history.pushState(null, '', clientProfileHref);
-                    setClientRailOpen(true);
-                  }}
-                  onPlanChange={markPostPending}
                 />
               ) : null}
               {tab === 'clients' ? (
@@ -1461,167 +1383,6 @@ function ClientsPanel({
           </div>
         </div>
         {clientNotice ? <p className="mt-3 font-body text-xs leading-relaxed text-[#6d675f]">{clientNotice}</p> : null}
-      </section>
-    </motion.section>
-  );
-}
-
-function MealsPanel({
-  selectedClient,
-  onAdminPlanSnapshot,
-  onOpenClientProfile,
-  onPlanChange,
-}: {
-  selectedClient: string;
-  onAdminPlanSnapshot: (snapshot: MealPrepPlanSnapshot) => void;
-  onOpenClientProfile: () => void;
-  onPlanChange: () => void;
-}) {
-  const target = defaultNutritionTarget;
-  const [checklistOpen, setChecklistOpen] = useState(false);
-  const clientProfileHref = `/admin/pulse?tab=clients&client=${encodeURIComponent(selectedClient)}`;
-
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="space-y-4"
-    >
-      <section className="min-w-0">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="font-section text-4xl leading-none">Meal plan for {selectedClient}</h2>
-          <div className="admin-fade-tabs grid grid-cols-3">
-            {[
-              ['Calories', target.calories],
-              ['Protein', target.protein],
-              ['Adherence', target.compliance],
-            ].map(([label, value]) => (
-              <a
-                key={label}
-                href={clientProfileHref}
-                onClick={(event) => {
-                  event.preventDefault();
-                  onOpenClientProfile();
-                }}
-                className="admin-liquid-button min-w-20 px-3 py-2 text-right transition hover:text-[#f24f09] active:scale-[0.98]"
-                aria-label={`Open ${selectedClient} profile to update ${label.toLowerCase()}`}
-              >
-                <p className="font-caption text-[8px] uppercase tracking-[0.12em] text-[#817b72]">{label}</p>
-                <p className="mt-1 font-headline text-base uppercase text-[#151515]">{value}</p>
-              </a>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <article className="rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
-            <div className="flex items-center gap-2">
-              <Utensils className="h-4 w-4 text-[#f24f09]" />
-              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Cadence</p>
-            </div>
-            <p className="mt-3 font-headline text-2xl uppercase leading-none">{target.cadence}</p>
-            <p className="mt-2 font-body text-xs leading-relaxed text-[#6d675f]">
-              Weekly Ideal Nutrition structure before coach-approved substitutions.
-            </p>
-          </article>
-          <article className="rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4 text-[#f24f09]" />
-              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Fulfillment</p>
-            </div>
-            <p className="mt-3 font-headline text-2xl uppercase leading-none">Order window</p>
-            <p className="mt-2 font-body text-xs leading-relaxed text-[#6d675f]">
-              Confirm selections before Sunday evening so meals land before training day one.
-            </p>
-          </article>
-          <article className="rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
-            <div className="flex items-center gap-2">
-              <Flame className="h-4 w-4 text-[#f24f09]" />
-              <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Training match</p>
-            </div>
-            <p className="mt-3 font-headline text-2xl uppercase leading-none">Fuel timing</p>
-            <p className="mt-2 font-body text-xs leading-relaxed text-[#6d675f]">
-              Pair higher-carb meals with strength and conditioning blocks.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section className="rounded-md border border-[#dedbd4] bg-white p-4">
-        <div className="mb-4 flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-[#f24f09]" />
-          <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#817b72]">Weekly nutrition board</p>
-        </div>
-        <div className="grid gap-2 md:grid-cols-5">
-          {nutritionWeek.map((day) => (
-            <article key={day.day} className="rounded-md border border-[#e6e2da] bg-[#fbfaf8] p-3">
-              <p className="font-caption text-[9px] uppercase tracking-[0.13em] text-[#817b72]">{day.day}</p>
-              <h3 className="mt-2 font-headline text-lg uppercase leading-none">{day.focus}</h3>
-              <p className="mt-2 font-body text-xs text-[#6d675f]">{day.meal}</p>
-              <p className="mt-4 font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">{day.status}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="relative min-h-[640px] overflow-hidden rounded-md border border-[#dedbd4] bg-[#fbfaf8] p-3 text-[#151515]">
-        <div className="min-h-[610px]">
-          <MealPrepPlanner
-            admin
-            clientName={selectedClient}
-            onAdminPlanSnapshot={onAdminPlanSnapshot}
-            onPlanChange={onPlanChange}
-          />
-        </div>
-        <button
-          type="button"
-          aria-expanded={checklistOpen}
-          onClick={() => setChecklistOpen((open) => !open)}
-          className="admin-liquid-button admin-liquid-glass absolute right-4 top-4 z-20 inline-flex min-h-10 items-center gap-2 rounded-full px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-white"
-        >
-          <ChefHat className="h-4 w-4 text-[#f24f09]" />
-          Checklist
-        </button>
-        <AnimatePresence>
-          {checklistOpen ? (
-            <motion.aside
-              initial={{ opacity: 0, scale: 0.92, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: -8 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="admin-liquid-glass absolute right-4 top-16 z-20 w-[min(18rem,calc(100%-2rem))] rounded-md p-4 text-white"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <ChefHat className="h-4 w-4 text-[#f24f09]" />
-                  <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#d8d2c9]">
-                    Prep checklist
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  aria-label="Close checklist"
-                  onClick={() => setChecklistOpen(false)}
-                  className="admin-liquid-button inline-flex h-8 w-8 items-center justify-center rounded-full text-[#d8d2c9] hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="mt-4 space-y-2">
-                {prepChecklist.map((item) => (
-                  <div key={item.label} className="rounded-md border border-white/10 bg-[#0b1217]/72 p-3">
-                    <p className="font-body text-sm font-semibold text-white">{item.label}</p>
-                    <p className="mt-1 font-caption text-[8px] uppercase tracking-[0.12em] text-[#f24f09]">
-                      {item.status}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </motion.aside>
-          ) : null}
-        </AnimatePresence>
       </section>
     </motion.section>
   );
@@ -1902,11 +1663,13 @@ function AppointmentsPanel({
                       }
                       className="mt-1 min-h-10 w-full rounded-full border border-[#dedbd4] bg-white px-3 font-body text-sm text-[#151515] outline-none focus:border-[#f24f09]"
                     >
-                      {Object.values(BOOKING_SERVICES).map((service) => (
+                      {Object.values(BOOKING_SERVICES)
+                        .filter((service) => service.type !== 'meal_prep')
+                        .map((service) => (
                         <option key={service.type} value={service.type}>
                           {service.label}
                         </option>
-                      ))}
+                        ))}
                     </select>
                   </label>
                 </div>
@@ -2123,11 +1886,13 @@ function AppointmentsPanel({
                           }
                           className="mt-2 min-h-11 w-full rounded-md border border-[#dedbd4] bg-white px-3 font-body text-sm outline-none focus:border-[#f24f09]"
                         >
-                          {Object.values(BOOKING_SERVICES).map((service) => (
+                          {Object.values(BOOKING_SERVICES)
+                            .filter((service) => service.type !== 'meal_prep')
+                            .map((service) => (
                             <option key={service.type} value={service.type}>
                               {service.label}
                             </option>
-                          ))}
+                            ))}
                         </select>
                       </label>
                       <label className="block">

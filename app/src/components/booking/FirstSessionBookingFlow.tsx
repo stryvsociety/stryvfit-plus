@@ -54,7 +54,7 @@ const steps: Array<{ id: BookingStep; label: string; eyebrow: string; icon: type
   { id: 'payment', label: 'Payment & Billing', eyebrow: 'Stripe', icon: CreditCard },
 ];
 
-const packageOptions: BookingServiceType[] = [
+const packageOptions: Array<Exclude<BookingServiceType, 'meal_prep'>> = [
   'free',
   'sessions_4',
   'sessions_8',
@@ -64,7 +64,7 @@ const packageOptions: BookingServiceType[] = [
   'online_coaching_elite',
 ];
 
-const packageHighlights: Record<BookingServiceType, string[]> = {
+const packageHighlights: Record<Exclude<BookingServiceType, 'meal_prep'>, string[]> = {
   free: ['60-minute assessment', 'No card required', 'Best for first fit check'],
   sessions_4: ['Four in-person sessions', 'One-time package', 'Good two-week launch'],
   sessions_8: ['Eight monthly sessions', 'One-time package', 'Steady training rhythm'],
@@ -72,7 +72,6 @@ const packageHighlights: Record<BookingServiceType, string[]> = {
   online_coaching_starter: ['Monthly coaching', 'Programming and check-ins', 'Remote-first support'],
   online_coaching_elevate: ['Priority feedback', 'Eight coaching sessions', 'Progressive programming'],
   online_coaching_elite: ['Advanced progression', 'Priority support', 'Highest accountability'],
-  meal_prep: ['Planning session', 'Ideal Nutrition links', 'No card required'],
 };
 
 const SESSION_DURATION_MINUTES = 60;
@@ -948,6 +947,14 @@ function CompletionPanel({
             Your saved booking details remain with Stripe, your calendar invite, and the confirmation message sent by the team.
           </p>
         )}
+        {selectedServiceType === 'free' ? (
+          <a
+            href="/account?billing=membership#membership-billing"
+            className="ios-pill mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-gold px-5 font-control text-sm font-semibold uppercase tracking-[0.08em] text-bg transition hover:bg-gold-deep"
+          >
+            Set up membership billing <ArrowRight className="h-4 w-4" strokeWidth={1.8} />
+          </a>
+        ) : null}
       </div>
     </div>
   );

@@ -14,8 +14,24 @@ import {
   normalizeClientPhoneInput,
 } from '../src/lib/bookings';
 import { clientLifecycleFromHistory } from '../src/lib/clientLifecycle';
+import { historyPathFromRedirectUrl } from '../src/lib/clientNavigation';
+import { MEMBERSHIP_INVOICE_SERVICE_TYPES, parseMembershipInvoiceService } from '../src/lib/bookingServices';
 
 describe('booking utilities', () => {
+  test('limits hosted membership invoices to existing one-time in-person packages', () => {
+    expect(MEMBERSHIP_INVOICE_SERVICE_TYPES).toEqual(['sessions_4', 'sessions_8', 'sessions_12']);
+    expect(parseMembershipInvoiceService('sessions_8')).toBe('sessions_8');
+    expect(parseMembershipInvoiceService('online_coaching_starter')).toBeNull();
+    expect(parseMembershipInvoiceService('free')).toBeNull();
+  });
+
+  test('converts an app-host redirect into a current-origin history path', () => {
+    expect(historyPathFromRedirectUrl('https://app.stryvsocietyfit.com/book?booking=confirmed#status')).toBe(
+      '/book?booking=confirmed#status'
+    );
+    expect(historyPathFromRedirectUrl('/book?booking=confirmed')).toBe('/book?booking=confirmed');
+  });
+
   test('records consent metadata for session bookings', () => {
     const metadata = buildBookingMetadata({
       serviceType: 'free',

@@ -53,5 +53,5 @@ export default async function AdminPulsePage({ searchParams }: AdminPulsePagePro
 
 function adminTabFromQuery(value: string | string[] | undefined): AdminTab {
   const tab = Array.isArray(value) ? value[0] : value;
-  return tab === 'meals' || tab === 'clients' ? tab : 'appointments';
+  return tab === 'clients' ? tab : 'appointments';
 }

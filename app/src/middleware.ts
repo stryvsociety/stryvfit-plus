@@ -16,7 +16,6 @@ const isMemberProtectedRoute = createRouteMatcher([
   '/book(.*)',
   '/coach(.*)',
   '/notes(.*)',
-  '/meals(.*)',
   '/api/bookings(.*)',
 ]);
 

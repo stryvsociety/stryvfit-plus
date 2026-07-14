@@ -6,6 +6,7 @@ import type { IdealNutritionMeal } from '@/types';
 import { buildPulseBrief } from '@/lib/idealNutrition';
 import { reportIncident } from '@/lib/reportIncident';
 import { GoogleScheduler, type SchedulerBookingDraft } from '@/components/scheduling/GoogleScheduler';
+import { historyPathFromRedirectUrl } from '@/lib/clientNavigation';
 
 type ApiResponse = {
   source: string;
@@ -238,7 +239,7 @@ export function MealPrepPlanner({
     }
 
     if (payload.redirectUrl) {
-      window.history.replaceState(null, '', payload.redirectUrl);
+      window.history.replaceState(null, '', historyPathFromRedirectUrl(payload.redirectUrl));
     }
 
     setBookingSuccess(true);

@@ -10,6 +10,9 @@ export type BookingServiceType =
 
 export type BookingPaymentMode = 'free' | 'payment' | 'subscription';
 
+export const MEMBERSHIP_INVOICE_SERVICE_TYPES = ['sessions_4', 'sessions_8', 'sessions_12'] as const;
+export type MembershipInvoiceServiceType = (typeof MEMBERSHIP_INVOICE_SERVICE_TYPES)[number];
+
 export type BookingService = {
   type: BookingServiceType;
   label: string;
@@ -85,8 +88,7 @@ export function parseBookingService(value: unknown): BookingServiceType {
     value === 'sessions_12' ||
     value === 'online_coaching_starter' ||
     value === 'online_coaching_elevate' ||
-    value === 'online_coaching_elite' ||
-    value === 'meal_prep'
+    value === 'online_coaching_elite'
   ) {
     return value;
   }
@@ -96,4 +98,10 @@ export function parseBookingService(value: unknown): BookingServiceType {
 export function getStripePriceId(service: BookingService): string | null {
   if (!service.stripePriceEnv) return null;
   return process.env[service.stripePriceEnv] ?? null;
+}
+
+export function parseMembershipInvoiceService(value: unknown): MembershipInvoiceServiceType | null {
+  return typeof value === 'string' && MEMBERSHIP_INVOICE_SERVICE_TYPES.includes(value as MembershipInvoiceServiceType)
+    ? (value as MembershipInvoiceServiceType)
+    : null;
 }

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function AdminNutritionPage() {
-  redirect('/admin/pulse?tab=meals');
+  redirect('/admin/pulse');
 }

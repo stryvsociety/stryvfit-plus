@@ -34,10 +34,10 @@ describe('admin surface regressions', () => {
     expect(source).toContain('await delay(CLERK_ASSET_REACHABILITY_RETRY_MS)');
   });
 
-  test('redirects the retired nutrition workspace into the live meals tab', () => {
+  test('keeps the retired nutrition workspace out of the shipped admin surface', () => {
     const source = readFileSync(join(appRoot, 'src/app/admin/nutrition/page.tsx'), 'utf8');
 
-    expect(source).toContain("redirect('/admin/pulse?tab=meals')");
+    expect(source).toContain("redirect('/admin/pulse')");
     expect(source).not.toContain('MealPrepPlanner');
   });
 
@@ -62,14 +62,23 @@ describe('admin surface regressions', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('keeps nutrition target CTAs linked to the selected client profile', () => {
+  test('keeps meal-prep UI out of the active admin studio bundle', () => {
     const source = readFileSync(join(appRoot, 'src/components/admin/TrainerOpsStudio.tsx'), 'utf8');
+    const sectionNavSource = readFileSync(join(appRoot, 'src/components/admin/AdminSectionNav.tsx'), 'utf8');
+    const bookingServicesSource = readFileSync(join(appRoot, 'src/lib/bookingServices.ts'), 'utf8');
+    const adminMealApiSource = readFileSync(join(appRoot, 'src/app/api/admin/meal-plans/route.ts'), 'utf8');
+    const clientMealApiSource = readFileSync(join(appRoot, 'src/app/api/client/meal-plans/route.ts'), 'utf8');
+    const idealNutritionApiSource = readFileSync(join(appRoot, 'src/app/api/ideal-nutrition/meals/route.ts'), 'utf8');
 
-    expect(source).toContain("const clientProfileHref = `/admin/pulse?tab=clients&client=${encodeURIComponent(selectedClient)}`;");
-    expect(source).toContain('href={clientProfileHref}');
-    expect(source).toContain('event.preventDefault();');
-    expect(source).toContain('onOpenClientProfile();');
-    expect(source).toContain('aria-label={`Open ${selectedClient} profile to update ${label.toLowerCase()}`}');
+    expect(source).not.toContain("@/components/meals/MealPrepPlanner");
+    expect(source).not.toContain('function MealsPanel');
+    expect(source).not.toContain('meal-plan-change');
+    expect(sectionNavSource).not.toContain("href: '/admin/pulse?tab=meals'");
+    expect(sectionNavSource).not.toContain("label: 'Meals'");
+    expect(bookingServicesSource).not.toContain("value === 'meal_prep'");
+    expect(adminMealApiSource).toContain("{ status: 404 }");
+    expect(clientMealApiSource).toContain("{ status: 404 }");
+    expect(idealNutritionApiSource).toContain("{ status: 404 }");
   });
 
   test('keeps the sidebar collapse control inside the desktop sidebar with click and hover expansion', () => {
@@ -106,13 +115,16 @@ describe('admin surface regressions', () => {
     const signInSource = readFileSync(join(appRoot, 'src/app/sign-in/[[...sign-in]]/page.tsx'), 'utf8');
 
     expect(schedulerSource).toContain('All sessions must be cancelled or rescheduled at least 24 hours in advance.');
-    expect(billingSource).toContain("label: 'Credit/debit card'");
+    expect(billingSource).toContain("payment_method_types: ['card']");
+    expect(billingSource).not.toContain('cashapp');
+    expect(billingSource).not.toContain('paypal');
     expect(signInSource).toContain("card: 'mx-auto w-full'");
     expect(signInSource).toContain("rootBox: 'mx-auto w-full'");
   });
 
   test('keeps SSF-42 client account management wired to Clerk, billing, and cancellation APIs', () => {
     const accountSource = readFileSync(join(appRoot, 'src/components/client/ClientAccountPage.tsx'), 'utf8');
+    const bookingFlowSource = readFileSync(join(appRoot, 'src/components/booking/FirstSessionBookingFlow.tsx'), 'utf8');
     const tabSource = readFileSync(join(appRoot, 'src/components/layout/TabBar.tsx'), 'utf8');
 
     expect(existsSync(join(appRoot, 'src/app/account/page.tsx'))).toBe(true);
@@ -120,11 +132,17 @@ describe('admin surface regressions', () => {
     expect(existsSync(join(appRoot, 'src/app/api/client/bookings/[id]/route.ts'))).toBe(true);
     expect(accountSource).toContain('openUserProfile');
     expect(accountSource).toContain("fetch('/api/client/profile'");
-    expect(accountSource).toContain("fetch('/api/billing/portal'");
+    expect(existsSync(join(appRoot, 'src/app/api/billing/membership-invoice/route.ts'))).toBe(true);
+    expect(accountSource).toContain("fetch('/api/billing/membership-invoice'");
+    expect(accountSource).toContain('Open secure Stripe invoice');
+    expect(accountSource).toContain('<Card id="membership-billing">');
+    expect(accountSource).toContain('window.location.assign(payload.url);');
+    expect(bookingFlowSource).toContain('href="/account?billing=membership#membership-billing"');
     expect(accountSource).toContain("fetch(`/api/client/bookings/${booking.id}`");
     expect(accountSource).toContain('Use Late Cancel');
     expect(tabSource).toContain("{ href: '/account', label: 'Account'");
-    expect(tabSource).toContain('grid grid-cols-5');
+    expect(tabSource).toContain('grid grid-cols-4');
+    expect(tabSource).not.toContain("href: '/meals'");
   });
 
   test('keeps SSF-42 admin scheduling and profile editing on real app APIs', () => {

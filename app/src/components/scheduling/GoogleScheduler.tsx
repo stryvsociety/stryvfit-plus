@@ -178,7 +178,7 @@ function DurationToggle({
   const isLightTone = tone === 'light';
 
   return (
-    <fieldset className={align === 'right' ? 'text-right' : 'text-left'}>
+    <fieldset className={`w-full sm:w-40 sm:shrink-0 ${align === 'right' ? 'text-right' : 'text-left'}`}>
       <legend
         className={`font-caption text-[9px] uppercase tracking-[0.14em] ${
           isLightTone ? 'text-[#817b72]' : 'text-text-dim'
@@ -187,7 +187,7 @@ function DurationToggle({
         Duration
       </legend>
       <div
-        className={`mt-1 inline-grid grid-cols-2 overflow-hidden rounded-full border ${
+        className={`mt-1 grid w-full grid-cols-2 overflow-hidden rounded-full border ${
           isLightTone ? 'border-[#dedbd4] bg-white' : 'border-border bg-bg/70'
         }`}
       >
@@ -199,7 +199,7 @@ function DurationToggle({
               type="button"
               aria-pressed={active}
               onClick={() => onChange(minutes)}
-              className={`min-h-10 min-w-16 px-3 font-headline text-base uppercase leading-none transition ${
+              className={`min-h-10 min-w-0 px-2 font-headline text-base uppercase leading-none transition ${
                 active
                   ? isLightTone
                     ? 'bg-[#151515] text-white'
@@ -489,8 +489,8 @@ export function GoogleScheduler({
 
     return (
       <section className="relative rounded-md border border-[#dedbd4] bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-[#f24f09]">
               Schedule
             </p>
@@ -501,7 +501,7 @@ export function GoogleScheduler({
               Map appointment blocks, client check-ins, and publishing windows before sending them to Google Calendar.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-[auto_auto_auto]">
+          <div className="grid w-full grid-cols-2 gap-2 text-left sm:w-auto sm:grid-cols-[auto_auto_auto] sm:text-right">
             <DurationToggle tone="light" value={selectedDuration} onChange={setSelectedDuration} />
             {manageAvailability ? (
               <button
@@ -518,7 +518,7 @@ export function GoogleScheduler({
               href={eventUrl}
               target="_blank"
               rel="noreferrer"
-              className="group relative inline-flex min-h-12 items-center justify-center gap-2 overflow-hidden rounded-md border border-[#f24f09] bg-transparent px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515]"
+              className="group relative col-span-2 inline-flex min-h-12 items-center justify-center gap-2 overflow-hidden rounded-md border border-[#f24f09] bg-transparent px-4 font-caption text-[10px] uppercase tracking-[0.14em] text-[#151515] sm:col-auto"
             >
               <span className="absolute inset-0 origin-left scale-x-0 bg-[#f24f09] transition-transform duration-300 ease-out group-hover:scale-x-100" />
               <span className="relative z-10 inline-flex items-center gap-2 transition-colors group-hover:text-white">
@@ -726,8 +726,8 @@ export function GoogleScheduler({
           : 'bg-transparent p-0'
       }
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <p
             className={`font-caption text-[10px] uppercase tracking-[0.16em] ${
               isLightTone ? 'text-[#f24f09]' : 'text-gold'

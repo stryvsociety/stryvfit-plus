@@ -1,18 +1,20 @@
 import Stripe from 'stripe';
-import type { AppUser } from '@/lib/auth';
+import { hasBookedFreeFirstSession, type AppUser } from '@/lib/auth';
+import {
+  BOOKING_SERVICES,
+  getStripePriceId,
+  type MembershipInvoiceServiceType,
+} from '@/lib/bookingServices';
 import { serviceClient } from '@/lib/supabase';
 import { appUrl, stripe } from '@/lib/stripeClient';
 
 export class BillingPortalUnavailableError extends Error {}
 export class BillingRetryUnavailableError extends Error {}
+export class MembershipInvoiceUnavailableError extends Error {}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const PAYMENT_METHOD_CONFIG = [
-  { id: 'card' as const, label: 'Credit/debit card', env: 'STRIPE_ACCEPTS_CARD', fallback: true },
-  { id: 'apple_pay' as const, label: 'Apple Pay', env: 'STRIPE_ACCEPTS_APPLE_PAY', fallback: true },
-  { id: 'cashapp' as const, label: 'Cash App Pay', env: 'STRIPE_ACCEPTS_CASH_APP_PAY', fallback: false },
-  { id: 'paypal' as const, label: 'PayPal', env: 'STRIPE_ACCEPTS_PAYPAL', fallback: false },
-];
+const MEMBERSHIP_INVOICE_DUE_DAYS = 7;
+const MEMBERSHIP_INVOICE_METADATA_KEY = 'stryvfit_membership_invoice';
 
 export type BillingStatus =
   | 'none'
@@ -24,16 +26,6 @@ export type BillingStatus =
   | 'canceled'
   | 'unpaid'
   | 'paused';
-
-export type BillingPaymentMethodSummary = {
-  type: string;
-  label: string;
-  brand?: string;
-  last4?: string;
-  expMonth?: number;
-  expYear?: number;
-  wallet?: string;
-};
 
 export type BillingInvoiceSummary = {
   id: string;
@@ -59,9 +51,7 @@ export type BillingSummary = {
   bookingLocked: boolean;
   canRetry: boolean;
   canUpdateBilling: boolean;
-  paymentMethod: BillingPaymentMethodSummary | null;
   latestInvoice: BillingInvoiceSummary | null;
-  acceptedPaymentMethods: Array<{ id: 'card' | 'apple_pay' | 'cashapp' | 'paypal'; label: string; available: boolean }>;
 };
 
 function stripeCustomerId(value: Stripe.Checkout.Session['customer'] | Stripe.Subscription['customer'] | null): string | null {
@@ -161,6 +151,134 @@ export async function storedCustomerIdForUser(appUser: AppUser): Promise<string 
   return (byEmail.data?.stripe_customer_id as string | undefined) ?? null;
 }
 
+async function ensureStripeCustomer(appUser: AppUser): Promise<string> {
+  const existing = await storedCustomerIdForUser(appUser);
+  if (existing) return existing;
+
+  const customer = await stripe().customers.create(
+    {
+      email: appUser.email,
+      name: appUser.full_name ?? undefined,
+      phone: appUser.phone ?? undefined,
+      metadata: { app_user_id: appUser.id, clerk_user_id: appUser.clerk_user_id },
+    },
+    { idempotencyKey: `stryvfit-customer:${appUser.id}` }
+  );
+  const { error } = await serviceClient()
+    .from('app_users')
+    .update({ stripe_customer_id: customer.id, updated_at: new Date().toISOString() })
+    .eq('id', appUser.id);
+  if (error) throw error;
+  return customer.id;
+}
+
+function isOpenMembershipInvoice(invoice: Stripe.Invoice): boolean {
+  return (
+    invoice.metadata?.[MEMBERSHIP_INVOICE_METADATA_KEY] === 'true' &&
+    ['draft', 'open'].includes(invoice.status ?? '') &&
+    (invoice.amount_remaining ?? invoice.amount_due ?? 0) > 0
+  );
+}
+
+async function findOpenMembershipInvoice(
+  customerId: string,
+  serviceType: MembershipInvoiceServiceType
+): Promise<Stripe.Invoice | null> {
+  const stripeClient = stripe();
+  const [drafts, open] = await Promise.all([
+    stripeClient.invoices.list({ customer: customerId, status: 'draft', limit: 100 }),
+    stripeClient.invoices.list({ customer: customerId, status: 'open', limit: 100 }),
+  ]);
+  const pendingInvoices = [...open.data, ...drafts.data].filter(isOpenMembershipInvoice);
+  const matchingInvoice = pendingInvoices.find((invoice) => invoice.metadata?.service_type === serviceType);
+  if (matchingInvoice) return matchingInvoice;
+
+  if (pendingInvoices.length > 0) {
+    throw new MembershipInvoiceUnavailableError(
+      'A different membership invoice is already open. Pay or void it in Stripe before choosing another package.'
+    );
+  }
+
+  return null;
+}
+
+async function finalizeMembershipInvoice(invoice: Stripe.Invoice, idempotencyKey: string): Promise<Stripe.Invoice> {
+  const finalized =
+    invoice.status === 'draft'
+      ? await stripe().invoices.finalizeInvoice(invoice.id, { auto_advance: false }, { idempotencyKey })
+      : invoice;
+  if (finalized.status !== 'open' || !finalized.hosted_invoice_url) {
+    throw new MembershipInvoiceUnavailableError('Stripe could not prepare a payable membership invoice.');
+  }
+  return finalized;
+}
+
+export async function createMembershipInvoice(
+  appUser: AppUser,
+  serviceType: MembershipInvoiceServiceType
+): Promise<{ invoice: Stripe.Invoice; reused: boolean }> {
+  if (appUser.role !== 'client') {
+    throw new MembershipInvoiceUnavailableError('Membership invoices are available from a client account only.');
+  }
+  if (!(await hasBookedFreeFirstSession(appUser))) {
+    throw new MembershipInvoiceUnavailableError('Book your free first session before opening membership billing.');
+  }
+
+  const service = BOOKING_SERVICES[serviceType];
+  const priceId = getStripePriceId(service);
+  if (!priceId) {
+    throw new MembershipInvoiceUnavailableError('This membership package is not configured for Stripe yet.');
+  }
+
+  const customerId = await ensureStripeCustomer(appUser);
+  const existingInvoice = await findOpenMembershipInvoice(customerId, serviceType);
+  if (existingInvoice) {
+    return {
+      invoice: await finalizeMembershipInvoice(existingInvoice, `stryvfit-membership:${appUser.id}:reuse-finalize`),
+      reused: true,
+    };
+  }
+
+  const stripeClient = stripe();
+  const price = await stripeClient.prices.retrieve(priceId);
+  if (!price.active || price.recurring) {
+    throw new MembershipInvoiceUnavailableError('This membership package cannot be invoiced as a one-time charge.');
+  }
+
+  const idempotencyBase = `stryvfit-membership:${appUser.id}:${serviceType}:${Math.floor(Date.now() / 60_000)}`;
+  const metadata = {
+    [MEMBERSHIP_INVOICE_METADATA_KEY]: 'true',
+    app_user_id: appUser.id,
+    service_type: serviceType,
+  };
+  const draft = await stripeClient.invoices.create(
+    {
+      customer: customerId,
+      collection_method: 'send_invoice',
+      days_until_due: MEMBERSHIP_INVOICE_DUE_DAYS,
+      auto_advance: false,
+      description: `${service.label} membership package`,
+      metadata,
+      payment_settings: { payment_method_types: ['card'] },
+    },
+    { idempotencyKey: `${idempotencyBase}:invoice` }
+  );
+  await stripeClient.invoiceItems.create(
+    {
+      customer: customerId,
+      invoice: draft.id,
+      pricing: { price: priceId },
+      quantity: 1,
+      metadata,
+    },
+    { idempotencyKey: `${idempotencyBase}:item` }
+  );
+  return {
+    invoice: await finalizeMembershipInvoice(draft, `${idempotencyBase}:finalize`),
+    reused: false,
+  };
+}
+
 function statusLabel(status: BillingStatus): string {
   const labels: Record<BillingStatus, string> = {
     none: 'No subscription',
@@ -223,59 +341,6 @@ function subscriptionAmountLabel(subscription: Stripe.Subscription | null): stri
   return price.recurring?.interval ? `${amount}/${price.recurring.interval}` : amount;
 }
 
-function paymentMethodLabel(paymentMethod: Stripe.PaymentMethod): BillingPaymentMethodSummary {
-  if (paymentMethod.type === 'card' && paymentMethod.card) {
-    const wallet = paymentMethod.card.wallet?.type ? prettyStatus(paymentMethod.card.wallet.type) : undefined;
-    const brand = prettyStatus(paymentMethod.card.brand);
-    const suffix = paymentMethod.card.last4 ? ` ending ${paymentMethod.card.last4}` : '';
-    return {
-      type: paymentMethod.type,
-      label: `${wallet ?? brand}${suffix}`,
-      brand,
-      last4: paymentMethod.card.last4 ?? undefined,
-      expMonth: paymentMethod.card.exp_month ?? undefined,
-      expYear: paymentMethod.card.exp_year ?? undefined,
-      wallet,
-    };
-  }
-
-  if (paymentMethod.type === 'cashapp') {
-    return { type: paymentMethod.type, label: 'Cash App Pay' };
-  }
-
-  if (paymentMethod.type === 'paypal') {
-    return { type: paymentMethod.type, label: 'PayPal' };
-  }
-
-  return { type: paymentMethod.type, label: prettyStatus(paymentMethod.type) };
-}
-
-function isExpandedPaymentMethod(value: unknown): value is Stripe.PaymentMethod {
-  return Boolean(value && typeof value === 'object' && 'object' in value && (value as { object?: string }).object === 'payment_method');
-}
-
-async function retrievePaymentMethod(
-  stripeClient: Stripe,
-  customer: Stripe.Customer | null,
-  subscription: Stripe.Subscription | null
-): Promise<BillingPaymentMethodSummary | null> {
-  const subscriptionPaymentMethod = subscription?.default_payment_method;
-  if (isExpandedPaymentMethod(subscriptionPaymentMethod)) return paymentMethodLabel(subscriptionPaymentMethod);
-  if (typeof subscriptionPaymentMethod === 'string') {
-    return paymentMethodLabel(await stripeClient.paymentMethods.retrieve(subscriptionPaymentMethod));
-  }
-
-  const customerPaymentMethod = customer?.invoice_settings.default_payment_method;
-  if (isExpandedPaymentMethod(customerPaymentMethod)) return paymentMethodLabel(customerPaymentMethod);
-  if (typeof customerPaymentMethod === 'string') {
-    return paymentMethodLabel(await stripeClient.paymentMethods.retrieve(customerPaymentMethod));
-  }
-
-  if (!customer?.id) return null;
-  const cards = await stripeClient.paymentMethods.list({ customer: customer.id, type: 'card', limit: 1 });
-  return cards.data[0] ? paymentMethodLabel(cards.data[0]) : null;
-}
-
 function invoiceSummary(invoice: Stripe.Invoice | null): BillingInvoiceSummary | null {
   if (!invoice) return null;
   return {
@@ -317,43 +382,19 @@ function calculateDaysPastDue(requiresPayment: boolean, dueIso: string | null): 
   return Math.floor((Date.now() - due.getTime()) / DAY_MS);
 }
 
-function envBoolean(name: string, fallback: boolean): boolean {
-  const value = process.env[name]?.trim().toLowerCase();
-  if (!value) return fallback;
-  if (['1', 'true', 'yes', 'on'].includes(value)) return true;
-  if (['0', 'false', 'no', 'off'].includes(value)) return false;
-  return fallback;
-}
-
-function paymentMethodAvailability(): BillingSummary['acceptedPaymentMethods'] {
-  return PAYMENT_METHOD_CONFIG.map((method) => ({
-    id: method.id,
-    label: method.label,
-    available: envBoolean(method.env, method.fallback),
-  }));
-}
-
 async function billingContext(appUser: AppUser) {
   const customerId = await storedCustomerIdForUser(appUser);
   if (!customerId) {
-    return { customerId: null, customer: null, subscription: null, invoice: null };
+    return { customerId: null, subscription: null, invoice: null };
   }
 
   const stripeClient = stripe();
-  const [customerResult, subscriptions] = await Promise.all([
-    stripeClient.customers
-      .retrieve(customerId, { expand: ['invoice_settings.default_payment_method'] })
-      .catch(() => null),
-    stripeClient.subscriptions.list({
-      customer: customerId,
-      status: 'all',
-      limit: 10,
-      expand: ['data.default_payment_method', 'data.latest_invoice', 'data.items.data.price.product'],
-    }),
-  ]);
-
-  const customer =
-    customerResult && !('deleted' in customerResult && customerResult.deleted) ? (customerResult as Stripe.Customer) : null;
+  const subscriptions = await stripeClient.subscriptions.list({
+    customer: customerId,
+    status: 'all',
+    limit: 10,
+    expand: ['data.latest_invoice', 'data.items.data.price.product'],
+  });
   const subscription = chooseSubscription(subscriptions.data, appUser.stripe_subscription_id ?? null);
   const expandedInvoice = subscription?.latest_invoice;
   const invoice =
@@ -367,20 +408,22 @@ async function billingContext(appUser: AppUser) {
           })
         ).data[0] ?? null;
 
-  return { customerId, customer, subscription, invoice };
+  return { customerId, subscription, invoice };
 }
 
 export async function getBillingSummary(appUser: AppUser): Promise<BillingSummary> {
-  const { customerId, customer, subscription, invoice } = await billingContext(appUser);
-  const stripeClient = stripe();
-  const acceptedPaymentMethods = paymentMethodAvailability();
-  const paymentMethod = await retrievePaymentMethod(stripeClient, customer, subscription);
+  const { customerId, subscription, invoice } = await billingContext(appUser);
   const status = (subscription?.status ?? 'none') as BillingStatus;
   const requiresPayment = subscriptionRequiresPayment(status) || invoiceRequiresPayment(invoice);
   const currentPeriodEnd = subscriptionCurrentPeriodEnd(subscription);
   const dueDate = timestampIso(invoice?.due_date) ?? timestampIso(invoice?.next_payment_attempt) ?? timestampIso(currentPeriodEnd);
   const daysPastDue = calculateDaysPastDue(requiresPayment, dueDate);
-  const canRetry = Boolean(invoice?.id && invoiceRequiresPayment(invoice) && ['open', 'draft'].includes(invoice.status ?? ''));
+  const canRetry = Boolean(
+    invoice?.id &&
+      invoiceRequiresPayment(invoice) &&
+      invoice.collection_method === 'charge_automatically' &&
+      ['open', 'draft'].includes(invoice.status ?? '')
+  );
 
   return {
     hasBilling: Boolean(customerId),
@@ -396,9 +439,7 @@ export async function getBillingSummary(appUser: AppUser): Promise<BillingSummar
     bookingLocked: daysPastDue >= 7 || status === 'unpaid' || status === 'canceled' || status === 'incomplete_expired',
     canRetry,
     canUpdateBilling: Boolean(customerId),
-    paymentMethod,
     latestInvoice: invoiceSummary(invoice),
-    acceptedPaymentMethods,
   };
 }
 

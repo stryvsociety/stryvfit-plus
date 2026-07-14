@@ -1,5 +1,12 @@
 # SSF First Session Booking Flow Progress
 
+## Mobile Membership Invoice Handoff - 2026-07-14
+
+- Wrote `sprint-md/S3-BRIEF-mobile-membership-invoice-handoff.md` as the execution source of truth for the reported Safari booking error, the clipped signed-in duration control, removal of ineligible payment methods, and the mobile membership-invoice handoff.
+- Confirmed the customer-facing invoice will use a manually finalized one-off Stripe invoice with automatic advancement disabled, so the returned Hosted Invoice Page is payable without creating a subscription that appears active before payment.
+- Recorded the Linear Awaiting Review audit as blocked by an expired connector token; no Linear state has been changed or assumed.
+- Expanded scope on 2026-07-14: meal prep is removed from reachable client/admin navigation and workflow routes, while its implementation remains in the repository for later integration.
+
 Date: 2026-07-03
 Branch: codex/ssf-guided-booking-flow
 
@@ -99,3 +106,13 @@ Source ledger:
 - Browser console output contained only the known localhost/production-Clerk origin mismatch. Production Clerk probes remained healthy: `https://stryvsocietyfit.com/__clerk/v1/environment` returned HTTP 200 and the unsigned session touch returned HTTP 401 `signed_out`.
 - No beta deployment was attempted because no application code changed. Current Vercel project listing contains no SSFitness app target, `app/.vercel/project.json` is absent, and `vercel inspect ssfitness-www-app-redirect` cannot find that project under the authenticated `solvys` context. The branch remains pushed at `beab463934aa76bc66a3550d10008a81458b3969`, with only the pre-existing untracked `.cursor/` outside this evidence note. This run is not eligible for `App Updated.`
 - Cleanup passed: the local Next server was stopped, the in-app browser tab was finalized with no kept tabs, and port 3001 has no listener or run-owned preview process.
+
+## Mobile Membership Invoice Handoff - 2026-07-14
+
+- Replaced the cross-origin booking history write with a same-origin path conversion, so a public-host booking confirmation cannot attempt to mutate history to `app.stryvsocietyfit.com`.
+- Removed Cash App Pay and PayPal from customer-facing configuration and Stripe setup/audit expectations. Membership billing now accepts only Stripe-hosted card invoices for the coach-confirmed in-person packages.
+- Added the authenticated free-session gate and idempotent hosted-invoice route. Repeated taps reopen the same package invoice; a different pending package is rejected to prevent duplicate charges.
+- Removed meal prep from reachable client/admin navigation, phase transitions, and route handoffs while retaining its implementation code for later integration.
+- Retired the three meal-prep API entry points behind 404 responses and removed `meal_prep` from active booking parsing and admin service pickers, so a crafted URL or request cannot revive the removed feature.
+- Local browser E2E reached the sandbox confirmation state and its membership-billing handoff. The browser backend's 320px capture is a scaled 1280px CSS viewport, so final mobile breakpoint proof must happen after deployment on the live target.
+- Final local checks passed: `bun test` (81 tests), `bun run typecheck`, `bun run lint`, `bun run build`, and `git diff --check`. During the build review, a client import of a server-only booking module was found and corrected before this record.

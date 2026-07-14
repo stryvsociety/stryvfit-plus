@@ -2,11 +2,16 @@
 
 import { type FormEvent, useState } from 'react';
 import { useClerk } from '@clerk/nextjs';
-import { CalendarX2, CreditCard, LockKeyhole, Save, UserRound } from 'lucide-react';
+import { CalendarX2, CreditCard, ExternalLink, LockKeyhole, Save, UserRound } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { ClientBookingSummary } from '@/lib/bookings';
+import {
+  BOOKING_SERVICES,
+  MEMBERSHIP_INVOICE_SERVICE_TYPES,
+  type MembershipInvoiceServiceType,
+} from '@/lib/bookingServices';
 
 type ClientProfileState = {
   email: string;
@@ -50,7 +55,8 @@ export function ClientAccountPage({
   });
   const [bookings, setBookings] = useState(initialBookings);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [billingBusy, setBillingBusy] = useState(false);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [membershipServiceType, setMembershipServiceType] = useState<MembershipInvoiceServiceType | ''>('');
   const [cancelingBookingId, setCancelingBookingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,28 +108,28 @@ export function ClientAccountPage({
     }
   }
 
-  async function openBillingPortal() {
-    if (billingBusy) return;
+  async function openMembershipInvoice() {
+    if (invoiceBusy || !membershipServiceType) return;
 
-    setBillingBusy(true);
+    setInvoiceBusy(true);
     setNotice(null);
     setError(null);
     try {
-      const response = await fetch('/api/billing/portal', {
+      const response = await fetch('/api/billing/membership-invoice', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ returnPath: '/account' }),
+        body: JSON.stringify({ serviceType: membershipServiceType }),
       });
       const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
       if (!response.ok || !payload?.url) {
-        throw new Error(payload?.error ?? 'Billing is not ready for this account yet.');
+        throw new Error(payload?.error ?? 'Unable to prepare membership billing.');
       }
 
       window.location.assign(payload.url);
     } catch (billingError) {
-      setError(billingError instanceof Error ? billingError.message : 'Unable to open billing');
+      setError(billingError instanceof Error ? billingError.message : 'Unable to prepare membership billing.');
     } finally {
-      setBillingBusy(false);
+      setInvoiceBusy(false);
     }
   }
 
@@ -204,7 +210,7 @@ export function ClientAccountPage({
               <Input
                 value={profile.profileGoal}
                 onChange={(event) => updateProfileField('profileGoal', event.target.value)}
-                placeholder="Strength, fat loss, mobility, meal prep..."
+                placeholder="Strength, fat loss, mobility, conditioning..."
               />
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -237,6 +243,44 @@ export function ClientAccountPage({
           </form>
         </Card>
 
+        <Card id="membership-billing">
+          <div className="mb-4 flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-gold" strokeWidth={1.7} />
+            <h2 className="font-section text-2xl tracking-normal text-text">Membership billing</h2>
+          </div>
+          <p className="font-body text-sm leading-relaxed text-text-muted">
+            Choose the in-person package your coach confirmed. Stripe opens a secure invoice; payment details never pass through StryvFit.
+          </p>
+          <label className="mt-4 block">
+            <span className="font-caption text-[10px] uppercase tracking-[0.16em] text-text-dim">Membership package</span>
+            <select
+              value={membershipServiceType}
+              onChange={(event) => setMembershipServiceType(event.target.value as MembershipInvoiceServiceType | '')}
+              className="mt-2 min-h-12 w-full rounded-md border border-border bg-surface-2 px-3 font-body text-sm text-text outline-none transition focus:border-gold"
+            >
+              <option value="">Choose a package</option>
+              {MEMBERSHIP_INVOICE_SERVICE_TYPES.map((serviceType) => (
+                <option key={serviceType} value={serviceType}>
+                  {BOOKING_SERVICES[serviceType].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            type="button"
+            variant="gold"
+            disabled={invoiceBusy || !membershipServiceType}
+            onClick={() => void openMembershipInvoice()}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2"
+          >
+            <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
+            {invoiceBusy ? 'Opening Stripe' : 'Open secure Stripe invoice'}
+          </Button>
+          <p className="mt-3 font-body text-xs leading-relaxed text-text-muted">
+            Stripe keeps the invoice payable for seven days. If one is already open, this CTA safely reopens it instead of creating another charge.
+          </p>
+        </Card>
+
         <Card>
           <div className="mb-4 flex items-center gap-2">
             <LockKeyhole className="h-5 w-5 text-gold" strokeWidth={1.7} />
@@ -246,7 +290,7 @@ export function ClientAccountPage({
             <p className="font-caption text-[10px] uppercase tracking-[0.16em] text-text-dim">Email</p>
             <p className="mt-1 break-words font-body text-sm text-text">{initialProfile.email}</p>
           </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3">
             <Button
               type="button"
               variant="secondary"
@@ -255,16 +299,6 @@ export function ClientAccountPage({
             >
               <LockKeyhole className="h-4 w-4" strokeWidth={1.8} />
               Email & Password
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={openBillingPortal}
-              disabled={billingBusy}
-              className="inline-flex items-center justify-center gap-2"
-            >
-              <CreditCard className="h-4 w-4" strokeWidth={1.8} />
-              {billingBusy ? 'Opening' : 'Billing'}
             </Button>
           </div>
         </Card>

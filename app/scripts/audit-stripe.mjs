@@ -50,25 +50,11 @@ const REQUIRED_WEBHOOK_EVENTS = [
   'invoice.paid',
 ];
 
-const REQUIRED_PAYMENT_METHODS = [
-  { key: 'apple_pay', label: 'Apple Pay', env: 'STRIPE_ACCEPTS_APPLE_PAY' },
-  { key: 'cashapp', label: 'Cash App Pay', env: 'STRIPE_ACCEPTS_CASH_APP_PAY' },
-  { key: 'paypal', label: 'PayPal', env: 'STRIPE_ACCEPTS_PAYPAL' },
-];
-
 function fmt(price) {
   if (!price) return 'n/a';
   const amt = price.unit_amount != null ? `$${(price.unit_amount / 100).toFixed(2)}` : '(custom)';
   const rec = price.recurring ? `/${price.recurring.interval}` : ' one-time';
   return `${amt}${rec}`;
-}
-
-function envBoolean(name) {
-  const value = env[name]?.trim().toLowerCase();
-  if (!value) return null;
-  if (['1', 'true', 'yes', 'on'].includes(value)) return true;
-  if (['0', 'false', 'no', 'off'].includes(value)) return false;
-  return null;
 }
 
 async function main() {
@@ -131,48 +117,6 @@ async function main() {
     }
   }
 
-  console.log('\n=== Payment method availability ===');
-  const livePaymentMethods = new Map();
-  try {
-    const paymentMethodConfigurations = await stripe.paymentMethodConfigurations.list({ limit: 1 });
-    const config = paymentMethodConfigurations.data[0];
-    if (!config) {
-      console.log('  MISSING (no payment method configuration)');
-      missing.push({ label: 'Payment method configuration' });
-    } else {
-      for (const method of REQUIRED_PAYMENT_METHODS) {
-        const state = config[method.key];
-        const available = state?.available === true;
-        const preference = state?.display_preference?.preference ?? 'unknown';
-        livePaymentMethods.set(method.key, { available, preference });
-        console.log(`  ${available ? 'OK     ' : 'MISSING'} ${method.label}  available=${available}  preference=${preference}`);
-        if (!available) missing.push({ label: `${method.label} activation` });
-      }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.log(`  MISSING (unable to read payment method configuration: ${message})`);
-    missing.push({ label: 'Payment method configuration read' });
-  }
-
-  console.log('\n=== Configured client payment-method display ===');
-  for (const method of REQUIRED_PAYMENT_METHODS) {
-    const configured = envBoolean(method.env);
-    const live = livePaymentMethods.get(method.key);
-    const configuredLabel = configured == null ? 'MISSING' : String(configured);
-    const liveLabel = live ? String(live.available) : 'unknown';
-    console.log(`  ${configured == null ? 'MISSING' : 'OK     '} ${method.env.padEnd(30)} configured=${configuredLabel}  stripe_available=${liveLabel}`);
-    if (configured == null) {
-      missing.push({ label: `${method.env} env` });
-      continue;
-    }
-    if (live && configured !== live.available) {
-      missing.push({
-        label: `${method.label} client config (${method.env}=${configured}) does not match Stripe availability (${live.available})`,
-      });
-    }
-  }
-
   console.log('\n=== Billing notice email provider ===');
   if (env.RESEND_API_KEY) {
     console.log('  OK      RESEND_API_KEY configured');
@@ -190,7 +134,7 @@ async function main() {
 
   console.log('\n=== Summary ===');
   if (missing.length === 0) {
-    console.log('All required prices, portal settings, webhook events, payment-method config, and email provider settings are present.');
+    console.log('All required prices, portal settings, webhook events, and email provider settings are present.');
   } else {
     console.log(`Missing/needs-attention: ${missing.map((m) => m.label).join(', ')}`);
   }

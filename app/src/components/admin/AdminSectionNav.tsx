@@ -1,21 +1,19 @@
 'use client';
 
-import { CalendarClock, Dumbbell, LifeBuoy, Salad, UsersRound } from 'lucide-react';
+import { CalendarClock, Dumbbell, LifeBuoy, UsersRound } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-type AdminSection = 'appointments' | 'workouts' | 'meals' | 'clients' | 'support';
+type AdminSection = 'appointments' | 'workouts' | 'clients' | 'support';
 
 type AdminSectionNavProps = {
   active: AdminSection;
   onAppointments?: () => void;
-  onMeals?: () => void;
   onClients?: () => void;
 };
 
 const sections = [
   { id: 'appointments', label: 'Appointments', icon: CalendarClock, href: '/admin/pulse' },
   { id: 'workouts', label: 'Workouts', icon: Dumbbell, href: '/admin/workouts' },
-  { id: 'meals', label: 'Meals', icon: Salad, href: '/admin/pulse?tab=meals' },
   { id: 'clients', label: 'Clients', icon: UsersRound, href: '/admin/pulse?tab=clients' },
   { id: 'support', label: 'Support', icon: LifeBuoy, href: '/admin/solvys-support' },
 ] satisfies Array<{
@@ -25,12 +23,12 @@ const sections = [
   href: string;
 }>;
 
-export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: AdminSectionNavProps) {
+export function AdminSectionNav({ active, onAppointments, onClients }: AdminSectionNavProps) {
   return (
     <div className="-mx-1 px-1 pb-1">
       <nav
         aria-label="StryvAdmin sections"
-        className="admin-fade-tabs grid min-h-14 grid-cols-3 bg-transparent sm:grid-cols-5"
+        className="admin-fade-tabs grid min-h-14 grid-cols-2 bg-transparent sm:grid-cols-4"
       >
         {sections.map((section) => {
           const Icon = section.icon;
@@ -38,11 +36,9 @@ export function AdminSectionNav({ active, onAppointments, onMeals, onClients }: 
           const clickHandler =
             section.id === 'appointments'
               ? onAppointments
-              : section.id === 'meals'
-                ? onMeals
-                : section.id === 'clients'
-                  ? onClients
-                  : undefined;
+              : section.id === 'clients'
+                ? onClients
+                : undefined;
           const content = (
             <>
               <motion.span
