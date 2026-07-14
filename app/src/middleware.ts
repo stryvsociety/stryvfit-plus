@@ -21,6 +21,12 @@ const isMemberProtectedRoute = createRouteMatcher([
 
 const isAdminProtectedRoute = createRouteMatcher(['/admin(.*)', '/api/admin(.*)']);
 
+const isRetiredMealPrepApiRoute = createRouteMatcher([
+  '/api/admin/meal-plans(.*)',
+  '/api/client/meal-plans(.*)',
+  '/api/ideal-nutrition/meals(.*)',
+]);
+
 const isAdminPublicRoute = createRouteMatcher(['/sign-in-admin(.*)', '/admin/access-denied']);
 
 function memberSignInUrl(req: Request & { nextUrl: URL }): URL {
@@ -57,6 +63,10 @@ export default clerkMiddleware(
 
     if (req.nextUrl.pathname === '/sign-in-admin') {
       return NextResponse.redirect(adminSignInUrl(req), 307);
+    }
+
+    if (isRetiredMealPrepApiRoute(req)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     if (isAdminPublicRoute(req)) {

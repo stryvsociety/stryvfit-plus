@@ -69,6 +69,7 @@ describe('admin surface regressions', () => {
     const adminMealApiSource = readFileSync(join(appRoot, 'src/app/api/admin/meal-plans/route.ts'), 'utf8');
     const clientMealApiSource = readFileSync(join(appRoot, 'src/app/api/client/meal-plans/route.ts'), 'utf8');
     const idealNutritionApiSource = readFileSync(join(appRoot, 'src/app/api/ideal-nutrition/meals/route.ts'), 'utf8');
+    const middlewareSource = readFileSync(join(appRoot, 'src/middleware.ts'), 'utf8');
 
     expect(source).not.toContain("@/components/meals/MealPrepPlanner");
     expect(source).not.toContain('function MealsPanel');
@@ -79,6 +80,9 @@ describe('admin surface regressions', () => {
     expect(adminMealApiSource).toContain("{ status: 404 }");
     expect(clientMealApiSource).toContain("{ status: 404 }");
     expect(idealNutritionApiSource).toContain("{ status: 404 }");
+    expect(middlewareSource).toContain("'/api/admin/meal-plans(.*)'");
+    expect(middlewareSource).toContain("if (isRetiredMealPrepApiRoute(req))");
+    expect(middlewareSource).toContain("{ status: 404 }");
   });
 
   test('keeps the sidebar collapse control inside the desktop sidebar with click and hover expansion', () => {
