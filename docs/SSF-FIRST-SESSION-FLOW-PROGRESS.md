@@ -113,6 +113,7 @@ Source ledger:
 - Local production verification passed for the sandbox flow. The browser bridge did not honor its 390px viewport override, so physical phone confirmation remains a required post-deploy gate rather than being represented as local mobile proof.
 - Cloudflare Worker version `9bf96ef1-86f6-4634-a066-7622c6d58edd` is live with the booking-recovery changes. Public smoke checks confirmed the retired banner is absent, the unsigned booking-checkout and membership-billing endpoints return `401`, and `/meals` redirects to `/book`.
 - The live worker has no `RESEND_API_KEY`, so the completed-session UI confirms the booking and calendar handoff without claiming an email or text message was sent. Stripe-hosted invoice delivery remains independent of that app notification provider.
+- Live incident evidence identified the paid-session failure as the Stripe SDK's Node transport timing out after 80 seconds inside the Cloudflare Worker. Checkout now uses Stripe's fetch transport with a 20-second bound, and mobile booking uses a document POST that receives a server-side `303` to Stripe instead of relying on Safari's failing JavaScript fetch path. The correction is live in Cloudflare Worker version `63f13344-fd7c-4d73-b4dd-c535b75b8cfa`.
 
 ## Mobile Membership Invoice Handoff - 2026-07-14
 
