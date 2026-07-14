@@ -5,8 +5,7 @@ export type BookingServiceType =
   | 'sessions_12'
   | 'online_coaching_starter'
   | 'online_coaching_elevate'
-  | 'online_coaching_elite'
-  | 'meal_prep';
+  | 'online_coaching_elite';
 
 export type BookingPaymentMode = 'free' | 'payment' | 'subscription';
 
@@ -69,12 +68,6 @@ export const BOOKING_SERVICES: Record<BookingServiceType, BookingService> = {
     description: 'Monthly online coaching with twelve sessions, advanced progression tracking, priority support, and goal tracking.',
     stripePriceEnv: 'NEXT_PUBLIC_STRIPE_PRICE_ONLINE_COACHING_ELITE',
     paymentMode: 'subscription',
-  },
-  meal_prep: {
-    type: 'meal_prep',
-    label: 'Meal prep planning',
-    description: 'Nutrition and meal-prep planning session. Meals are fulfilled by Ideal Nutrition via affiliate links; the session itself is a free planning touchpoint.',
-    paymentMode: 'free',
   },
 };
 

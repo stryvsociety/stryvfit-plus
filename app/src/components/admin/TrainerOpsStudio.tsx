@@ -1663,13 +1663,11 @@ function AppointmentsPanel({
                       }
                       className="mt-1 min-h-10 w-full rounded-full border border-[#dedbd4] bg-white px-3 font-body text-sm text-[#151515] outline-none focus:border-[#f24f09]"
                     >
-                      {Object.values(BOOKING_SERVICES)
-                        .filter((service) => service.type !== 'meal_prep')
-                        .map((service) => (
+                      {Object.values(BOOKING_SERVICES).map((service) => (
                         <option key={service.type} value={service.type}>
                           {service.label}
                         </option>
-                        ))}
+                      ))}
                     </select>
                   </label>
                 </div>
@@ -1886,13 +1884,11 @@ function AppointmentsPanel({
                           }
                           className="mt-2 min-h-11 w-full rounded-md border border-[#dedbd4] bg-white px-3 font-body text-sm outline-none focus:border-[#f24f09]"
                         >
-                          {Object.values(BOOKING_SERVICES)
-                            .filter((service) => service.type !== 'meal_prep')
-                            .map((service) => (
+                          {Object.values(BOOKING_SERVICES).map((service) => (
                             <option key={service.type} value={service.type}>
                               {service.label}
                             </option>
-                            ))}
+                          ))}
                         </select>
                       </label>
                       <label className="block">

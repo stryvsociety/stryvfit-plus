@@ -54,7 +54,7 @@ const steps: Array<{ id: BookingStep; label: string; eyebrow: string; icon: type
   { id: 'payment', label: 'Payment & Billing', eyebrow: 'Stripe', icon: CreditCard },
 ];
 
-const packageOptions: Array<Exclude<BookingServiceType, 'meal_prep'>> = [
+const packageOptions: BookingServiceType[] = [
   'free',
   'sessions_4',
   'sessions_8',
@@ -64,7 +64,7 @@ const packageOptions: Array<Exclude<BookingServiceType, 'meal_prep'>> = [
   'online_coaching_elite',
 ];
 
-const packageHighlights: Record<Exclude<BookingServiceType, 'meal_prep'>, string[]> = {
+const packageHighlights: Record<BookingServiceType, string[]> = {
   free: ['60-minute assessment', 'No card required', 'Best for first fit check'],
   sessions_4: ['Four in-person sessions', 'One-time package', 'Good two-week launch'],
   sessions_8: ['Eight monthly sessions', 'One-time package', 'Steady training rhythm'],

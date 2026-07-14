@@ -58,21 +58,6 @@ describe('booking utilities', () => {
     });
   });
 
-  test('does not require consent metadata for meal prep bookings', () => {
-    const metadata = buildBookingMetadata({
-      serviceType: 'meal_prep',
-      consentAcknowledged: false,
-    });
-
-    expect(metadata).toMatchObject({
-      source: 'stryvfit-booking-flow',
-      communication: {
-        preferredChannel: 'email',
-      },
-    });
-    expect(metadata).not.toHaveProperty('consent');
-  });
-
   test('keeps exact trainer starts instead of stepping by duration plus buffer', () => {
     const availability = parseBookingAvailability({
       firstStart: '06:30',

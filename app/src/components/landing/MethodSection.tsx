@@ -14,11 +14,6 @@ const methods = [
     subtitle: 'FOCUSED SESSIONS',
     body: 'Full 60-minute session focused on your goals. Customized programming, hands-on form coaching, and progressive overload. All fitness levels welcome. Your first session is on us.',
   },
-  {
-    title: 'Nutrition & Meal Prep Planning & Services',
-    subtitle: 'FUEL THE GAINS',
-    body: 'Majority of results are built in the kitchen; the gym tones those gains into the physique you want to achieve. STRYV offers great nutritional options, simple meal structure, and support that keeps your training fueled.',
-  },
 ];
 
 export default function MethodSection() {

@@ -5,7 +5,6 @@ export const CAL = {
     free: process.env.NEXT_PUBLIC_CAL_EVENT_FREE ?? 'free-first-session',
     coaching: process.env.NEXT_PUBLIC_CAL_EVENT_COACHING ?? 'coaching-session',
     premium: process.env.NEXT_PUBLIC_CAL_EVENT_PREMIUM ?? 'premium-session',
-    mealPrep: process.env.NEXT_PUBLIC_CAL_EVENT_MEAL_PREP ?? 'meal-prep-planning',
   },
 } as const;
 

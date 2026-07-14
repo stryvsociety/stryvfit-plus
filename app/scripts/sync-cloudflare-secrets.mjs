@@ -45,7 +45,6 @@ const wranglerVars = new Set([
   'NEXT_PUBLIC_CAL_EVENT_FREE',
   'NEXT_PUBLIC_CAL_EVENT_COACHING',
   'NEXT_PUBLIC_CAL_EVENT_PREMIUM',
-  'NEXT_PUBLIC_CAL_EVENT_MEAL_PREP',
   'WGER_API_BASE_URL',
 ]);
 const keys = Object.keys(env).filter(

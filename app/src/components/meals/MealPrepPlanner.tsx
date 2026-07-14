@@ -7,6 +7,7 @@ import { buildPulseBrief } from '@/lib/idealNutrition';
 import { reportIncident } from '@/lib/reportIncident';
 import { GoogleScheduler, type SchedulerBookingDraft } from '@/components/scheduling/GoogleScheduler';
 import { historyPathFromRedirectUrl } from '@/lib/clientNavigation';
+import type { BookingServiceType } from '@/lib/bookingServices';
 
 type ApiResponse = {
   source: string;
@@ -515,7 +516,7 @@ export function MealPrepPlanner({
                 description="Review Ideal Nutrition picks and set the weekly meal-prep rhythm."
                 durationMinutes={30}
                 context={pulseContext}
-                serviceType="meal_prep"
+                serviceType={'meal_prep' as BookingServiceType}
                 onBookSession={createMealPrepBooking}
               />
             </div>

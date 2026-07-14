@@ -61,7 +61,6 @@
     "NEXT_PUBLIC_CAL_EVENT_FREE": "free-first-session",
     "NEXT_PUBLIC_CAL_EVENT_COACHING": "coaching-session",
     "NEXT_PUBLIC_CAL_EVENT_PREMIUM": "premium-session",
-    "NEXT_PUBLIC_CAL_EVENT_MEAL_PREP": "meal-prep-planning",
     "WGER_API_BASE_URL": "https://workouts.stryvsocietyfit.com"
   }
 }

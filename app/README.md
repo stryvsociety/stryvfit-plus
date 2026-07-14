@@ -30,7 +30,6 @@ This README is the app developer summary, not the full operator guide.
 
 - `/book` — Stryv-themed scheduler that creates Google Calendar events
 - `/notes` — trainer notes (Supabase realtime, RLS per client)
-- `/meals` — Ideal Nutrition meal-prep picker with trainer notes and calendar scheduling
 - `/coach` — iMessage CTA via `sms:` deep link to admin-configured trainer phone
 - `/admin/pulse` — StryvAdmin dashboard for scheduling, nutrition, and support health workflows
 - `/admin/workouts` — trainer workout builder backed by the wger exercise library proxy

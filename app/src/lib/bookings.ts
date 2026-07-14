@@ -8,6 +8,7 @@ import {
   BOOKING_SERVICES,
   getStripePriceId,
   parseBookingService,
+  type BookingService,
   type BookingServiceType,
 } from '@/lib/bookingServices';
 import {
@@ -93,6 +94,17 @@ export type ClientBookingSummary = AdminBookingSummary & {
   lateCancellation: boolean;
   lateCancellationBlocked: boolean;
 };
+
+const ARCHIVED_BOOKING_SERVICE: BookingService = {
+  type: 'free',
+  label: 'Archived session',
+  description: 'This retired service is no longer available for booking.',
+  paymentMode: 'free',
+};
+
+function bookingServiceForType(serviceType: string): BookingService {
+  return BOOKING_SERVICES[serviceType as BookingServiceType] ?? ARCHIVED_BOOKING_SERVICE;
+}
 
 type CreateBookingInput = {
   appUserId: string;
@@ -332,7 +344,7 @@ function toAdminBookingSummary(row: BookingRow): AdminBookingSummary {
     id: row.id,
     source: 'app',
     serviceType: row.service_type,
-    serviceLabel: BOOKING_SERVICES[row.service_type].label,
+    serviceLabel: bookingServiceForType(row.service_type).label,
     status: row.status,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
@@ -1180,7 +1192,7 @@ async function deleteBookingRow(bookingId: string): Promise<void> {
 }
 
 function calendarInputForBooking(booking: BookingRow): Parameters<typeof createCalendarEvent>[0] {
-  const service = BOOKING_SERVICES[booking.service_type];
+  const service = bookingServiceForType(booking.service_type);
   return {
     bookingId: booking.id,
     title: `StryvFit+: ${service.label}`,
@@ -1473,7 +1485,7 @@ export async function expireBookingForStripeSession(sessionId: string) {
 export async function ensureGoogleEvent(booking: BookingRow) {
   if (booking.google_event_id) return booking.google_event_id;
 
-  const service = BOOKING_SERVICES[booking.service_type];
+  const service = bookingServiceForType(booking.service_type);
   const googleEventId = await createCalendarEvent({
     bookingId: booking.id,
     title: `StryvFit+: ${service.label}`,
@@ -1500,5 +1512,5 @@ export async function ensureGoogleEvent(booking: BookingRow) {
 }
 
 export function priceIdForService(serviceType: BookingServiceType): string | null {
-  return getStripePriceId(BOOKING_SERVICES[serviceType]);
+  return getStripePriceId(bookingServiceForType(serviceType));
 }

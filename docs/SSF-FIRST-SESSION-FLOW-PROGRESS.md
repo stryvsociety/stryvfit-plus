@@ -114,5 +114,6 @@ Source ledger:
 - Added the authenticated free-session gate and idempotent hosted-invoice route. Repeated taps reopen the same package invoice; a different pending package is rejected to prevent duplicate charges.
 - Removed meal prep from reachable client/admin navigation, phase transitions, and route handoffs while retaining its implementation code for later integration.
 - Retired the three meal-prep API entry points behind 404 responses and removed `meal_prep` from active booking parsing and admin service pickers, so a crafted URL or request cannot revive the removed feature.
+- Removed the legacy calendar event binding and homepage nutrition/meal card. The active booking catalog no longer ships the deferred service object, while historical rows render as an archived session instead of failing.
 - Local browser E2E reached the sandbox confirmation state and its membership-billing handoff. The browser backend's 320px capture is a scaled 1280px CSS viewport, so final mobile breakpoint proof must happen after deployment on the live target.
 - Final local checks passed: `bun test` (81 tests), `bun run typecheck`, `bun run lint`, `bun run build`, and `git diff --check`. During the build review, a client import of a server-only booking module was found and corrected before this record.
