@@ -163,3 +163,9 @@ Source ledger:
 - Vercel beta deployment remains blocked. `vercel project ls --filter ssfitness` shows only `ssfitness-www-app-redirect`; inspection shows a ready production `api/redirect` shim with rewrite `/(.*) -> /api/redirect`, not the SSFitness beta app. There is no `app/.vercel/project.json` or beta project linkage in `app/.env.local`. The branch is pushed, but no beta deployment or beta URL verification occurred, so this run is not eligible for `App Updated.`
 - Linear follow-up comments were prepared for `SSF-49`, `SSF-48`, `SSF-47`, `SSF-46`, `SSF-45`, and `SSF-44`, but the connected Linear app rejected every write with `reauthentication_required` / `oauth_token_invalid_grant`; no ticket state or comment was changed by this run.
 - [SSF-FIRST-SESSION-FLOW-PROGRESS.md](/Users/tifos/Desktop/SSFitness/docs/SSF-FIRST-SESSION-FLOW-PROGRESS.md) records this evidence. Cleanup passed: the local production server stopped, port 3001 has no listener, the in-app browser finalized with no kept tabs, and no run-owned browser process remains.
+
+## Notice Deployment - 2026-07-16
+
+- Deployed commit `85a3001` to the canonical Cloudflare Worker `stryvfit-plus`; Cloudflare reported current version `eef042ca-cbfe-4536-85e0-51ce93c95813` with `app.stryvsocietyfit.com/*` attached.
+- Codex in-app browser verification at `https://app.stryvsocietyfit.com/sandbox/first-session-booking` found the exact rendered text `yesterday's bugs have been zapped`, fixed positioning at `left: 20px`, `bottom: 16px`, `z-index: 54`, and no console errors. After scrolling to `scrollY=302`, the notice remained at the same viewport coordinates.
+- Pre-deploy checks passed: 85 tests / 300 assertions, typecheck, lint, production build, and `git diff --check`. The existing Vercel redirect shim was not modified; the notice fix is live on the actual Cloudflare app surface.
