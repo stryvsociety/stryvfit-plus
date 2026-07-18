@@ -279,6 +279,11 @@ export function FirstSessionBookingFlow({
     if (stepIndex(next) > stepIndex(furthestStep)) setFurthestStep(next);
   }
 
+  function updateClientName(value: string) {
+    setClientName(value);
+    if (value.trim()) setSubmitError(null);
+  }
+
   function validateStep(step: BookingStep): string | null {
     if (step === 'basic') {
       if (!clientName.trim()) return 'Enter your name before choosing a date.';
@@ -502,9 +507,9 @@ export function FirstSessionBookingFlow({
                         clientPhone={clientPhone}
                         communicationPreference={communicationPreference}
                         email={profile.email}
-                        error={submitError}
+                        error={activeStep === 'basic' ? submitError : null}
                         forceMobileLayout={forceMobileLayout}
-                        onClientNameChange={setClientName}
+                        onClientNameChange={updateClientName}
                         onClientPhoneChange={setClientPhone}
                         onCommunicationPreferenceChange={setCommunicationPreference}
                       />
