@@ -12,7 +12,6 @@ import {
   findActiveBookingForExactSlot,
   normalizeBookingDate,
   normalizeClientPhoneInput,
-  priceIdForService,
   type BookingRow,
   type BookingCommunicationPreference,
 } from '@/lib/bookings';
@@ -24,6 +23,7 @@ import { RETURNING_MEMBER_BOOKING_PATH } from '@/lib/routes';
 import { sendBookingCompletionNotice } from '@/lib/bookingNotifications';
 import { captureServerIncident } from '@/lib/serverIncidents';
 import { appUrl, stripe } from '@/lib/stripeClient';
+import { getLiveStripePriceId } from '@/lib/stripePricing';
 
 export const runtime = 'nodejs';
 
@@ -352,7 +352,7 @@ async function checkoutResponse(req: Request) {
     return completeFreeSessionBooking(appUser, booking);
   }
 
-  const priceId = priceIdForService(serviceType);
+  const priceId = await getLiveStripePriceId(serviceType);
   if (!priceId) {
     return NextResponse.json({ error: `Stripe price is not configured for ${serviceType}` }, { status: 500 });
   }

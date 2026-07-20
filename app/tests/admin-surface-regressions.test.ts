@@ -25,15 +25,6 @@ describe('admin surface regressions', () => {
     expect(source).toContain('await delay(CLERK_ASSET_REACHABILITY_RETRY_MS)');
   });
 
-  test('keeps the required maintenance notice visible at the bottom-left', () => {
-    const source = readFileSync(join(appRoot, 'src/components/pwa/PWAClient.tsx'), 'utf8');
-
-    expect(source).toContain('data-testid="bug-zap-notice"');
-    expect(source).toContain("yesterday&apos;s bugs have been zapped");
-    expect(source).toContain('fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-3');
-    expect(source).toContain('rounded-[18px]');
-  });
-
   test('keeps the retired nutrition workspace out of the shipped admin surface', () => {
     const source = readFileSync(join(appRoot, 'src/app/admin/nutrition/page.tsx'), 'utf8');
 

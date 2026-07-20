@@ -1,9 +1,11 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useScroll, useTransform, type MotionValue } from 'framer-motion';
+import type { LiveWebsitePrices, WebsitePricingService } from '@/lib/stripePricing';
 
 type PricingPlan = {
+  service: WebsitePricingService;
   name: string;
   price: string;
   period: string;
@@ -17,6 +19,7 @@ type PricingMode = 'in_person' | 'remote';
 
 const inPersonPlans: PricingPlan[] = [
   {
+    service: 'sessions_4',
     name: '4 Sessions',
     price: '$120',
     period: '',
@@ -31,6 +34,7 @@ const inPersonPlans: PricingPlan[] = [
     href: '/book?service=sessions_4',
   },
   {
+    service: 'sessions_8',
     name: '8 Sessions',
     price: '$200',
     period: '',
@@ -45,6 +49,7 @@ const inPersonPlans: PricingPlan[] = [
     href: '/book?service=sessions_8',
   },
   {
+    service: 'sessions_12',
     name: '12 Sessions',
     price: '$300',
     period: '',
@@ -62,6 +67,7 @@ const inPersonPlans: PricingPlan[] = [
 
 const onlineCoachingPlans: PricingPlan[] = [
   {
+    service: 'online_coaching_starter',
     name: 'Starter',
     price: '$100',
     period: '/ month',
@@ -78,6 +84,7 @@ const onlineCoachingPlans: PricingPlan[] = [
     href: '/book?service=online_coaching_starter',
   },
   {
+    service: 'online_coaching_elevate',
     name: 'Elevate',
     price: '$180',
     period: '/ month',
@@ -95,6 +102,7 @@ const onlineCoachingPlans: PricingPlan[] = [
     href: '/book?service=online_coaching_elevate',
   },
   {
+    service: 'online_coaching_elite',
     name: 'Elite',
     price: '$250',
     period: '/ month',
@@ -145,11 +153,30 @@ const pricingModeContent: Record<
 export default function PricingSection() {
   const ref = useRef(null);
   const [selectedMode, setSelectedMode] = useState<PricingMode>('in_person');
+  const [livePrices, setLivePrices] = useState<LiveWebsitePrices>({});
   const activeMode = pricingModeContent[selectedMode];
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ['start end', 'end start'],
   });
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetch('/api/pricing', { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Live pricing request failed');
+        return (await response.json()) as { prices?: LiveWebsitePrices };
+      })
+      .then((payload) => setLivePrices(payload.prices ?? {}))
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          // Keep the established published price visible when Stripe is temporarily unavailable.
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
 
   return (
     <section
@@ -237,7 +264,13 @@ export default function PricingSection() {
             className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto"
           >
             {activeMode.plans.map((plan, i) => (
-              <PlanCard key={`${selectedMode}-${plan.name}`} plan={plan} index={i} scrollYProgress={scrollYProgress} />
+              <PlanCard
+                key={`${selectedMode}-${plan.name}`}
+                plan={plan}
+                livePrice={livePrices[plan.service]}
+                index={i}
+                scrollYProgress={scrollYProgress}
+              />
             ))}
           </motion.div>
         </AnimatePresence>
@@ -248,10 +281,12 @@ export default function PricingSection() {
 
 function PlanCard({
   plan,
+  livePrice,
   index,
   scrollYProgress,
 }: {
   plan: PricingPlan;
+  livePrice?: LiveWebsitePrices[WebsitePricingService];
   index: number;
   scrollYProgress: MotionValue<number>;
 }) {
@@ -270,11 +305,11 @@ function PlanCard({
 
         <div className="flex items-baseline gap-1 mb-3">
           <span className="font-price text-4xl md:text-5xl font-semibold text-gold">
-            {plan.price}
+            {livePrice?.amount ?? plan.price}
           </span>
-          {plan.period && (
+          {(livePrice?.period ?? plan.period) && (
             <span className="font-price text-text-muted text-sm">
-              {plan.period}
+              {livePrice?.period ?? plan.period}
             </span>
           )}
         </div>

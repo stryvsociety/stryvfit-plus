@@ -408,15 +408,6 @@ export function PWAClient() {
 
   return (
     <>
-      <aside
-        aria-live="polite"
-        className="pointer-events-none fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-3 z-[54] sm:left-5"
-        data-testid="bug-zap-notice"
-      >
-        <p className="rounded-[18px] border border-gold/20 bg-surface-2/95 px-3.5 py-2.5 font-body text-xs leading-tight text-text shadow-glass">
-          yesterday&apos;s bugs have been zapped
-        </p>
-      </aside>
       {banner && !hidePromptsOnAdminSignIn && Icon ? (
         <aside className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md">
           <div className={`flex items-start gap-3 rounded-md border px-4 py-3 shadow-glass ${banner.tone}`}>
